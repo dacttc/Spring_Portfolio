@@ -1,0 +1,893 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>City Builder</title>
+    <script src="/js/i18n.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+            color: #1e293b;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .logo {
+            font-size: 3rem;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -1px;
+            margin-bottom: 8px;
+        }
+
+        .logo span {
+            color: #3b82f6;
+        }
+
+        .tagline {
+            font-size: 1rem;
+            color: #64748b;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        /* Navigation */
+        .nav-bar {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .nav-link {
+            padding: 12px 24px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            color: #475569;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .nav-link:hover {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .nav-link.primary {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: #fff;
+            border: none;
+        }
+
+        .nav-link.primary:hover {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.35);
+        }
+
+        /* Last Played Button */
+        .last-played-btn {
+            padding: 10px 20px !important;
+        }
+
+        .last-played-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .last-played-icon {
+            font-size: 1.4rem;
+        }
+
+        .last-played-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+        }
+
+        .last-played-city-name {
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+
+        .last-played-details {
+            font-size: 0.75rem;
+            opacity: 0.85;
+        }
+
+        /* Main content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Card */
+        .card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .card h2 {
+            font-size: 1.4rem;
+            margin-bottom: 16px;
+            color: #0f172a;
+        }
+
+        .card p {
+            color: #64748b;
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 28px;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .avatar {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .user-details {
+            text-align: left;
+        }
+
+        .user-name {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .user-status {
+            font-size: 0.85rem;
+            color: #22c55e;
+            font-weight: 500;
+        }
+
+        /* Buttons */
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 24px;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+            border-color: #cbd5e1;
+        }
+
+        .btn-danger {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+
+        .btn-danger:hover {
+            background: #fee2e2;
+        }
+
+        /* Alert */
+        .alert {
+            padding: 14px 18px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+
+        .alert-success {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #16a34a;
+        }
+
+        /* Admin badge */
+        .admin-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            background: linear-gradient(135deg, #f97316, #ea580c);
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #fff;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: #94a3b8;
+            font-size: 0.85rem;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #fff;
+            border-radius: 16px;
+            padding: 28px;
+            max-width: 560px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .modal-header h2 {
+            font-size: 1.3rem;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-close {
+            background: #f1f5f9;
+            border: none;
+            color: #64748b;
+            font-size: 1.3rem;
+            cursor: pointer;
+            padding: 6px 10px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        /* City List */
+        .city-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .city-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .city-item:hover {
+            background: #f1f5f9;
+            border-color: #cbd5e1;
+            transform: translateX(4px);
+        }
+
+        .city-info {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .city-icon {
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .city-details h3 {
+            font-size: 1rem;
+            color: #0f172a;
+            margin-bottom: 3px;
+        }
+
+        .city-details span {
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+
+        .city-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .city-btn {
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+            text-decoration: none;
+        }
+
+        .city-btn-enter {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: #fff;
+        }
+
+        .city-btn-enter:hover {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        }
+
+        .city-btn-delete {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+
+        .city-btn-delete:hover {
+            background: #fee2e2;
+        }
+
+        /* Create City Section */
+        .create-city-section {
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .create-city-section h3 {
+            font-size: 1rem;
+            color: #0f172a;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .create-city-form {
+            display: flex;
+            gap: 10px;
+        }
+
+        .create-city-form input {
+            flex: 1;
+            padding: 12px 16px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            color: #0f172a;
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .create-city-form input:focus {
+            border-color: #3b82f6;
+            background: #fff;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .create-city-form input::placeholder {
+            color: #94a3b8;
+        }
+
+        .create-city-form button {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .create-city-form button:hover {
+            background: linear-gradient(135deg, #16a34a, #15803d);
+            transform: translateY(-1px);
+        }
+
+        .create-city-form button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* City count */
+        .city-count {
+            text-align: center;
+            color: #64748b;
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+        }
+
+        .city-count strong {
+            color: #3b82f6;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 30px;
+            color: #64748b;
+        }
+
+        .empty-state span {
+            font-size: 2.5rem;
+            display: block;
+            margin-bottom: 12px;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 30px;
+            color: #64748b;
+        }
+
+        .loading::after {
+            content: '';
+            animation: dots 1.5s infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="logo">CITY <span>BUILDER</span></h1>
+            <p class="tagline" data-i18n="home.tagline">Build Your Dream City</p>
+        </header>
+
+        <!-- Logged in user -->
+        <div th:if="${#authorization.expression('isAuthenticated()')}">
+            <nav class="nav-bar">
+                <a id="btnLastPlayed" href="#" class="nav-link primary last-played-btn" style="display: none;">
+                    <div class="last-played-content">
+                        <span class="last-played-icon">🎮</span>
+                        <div class="last-played-info">
+                            <span id="lastPlayedCityName" class="last-played-city-name">City Name</span>
+                            <span id="lastPlayedDetails" class="last-played-details">💰0 · 👥0</span>
+                        </div>
+                    </div>
+                </a>
+                <a href="/mypage" class="nav-link" data-i18n="common.mypage">My Page</a>
+                <a sec:authorize="hasRole('ADMIN')" href="/admin" class="nav-link">Admin</a>
+            </nav>
+
+            <div class="main-content">
+                <div class="card">
+                    <div class="user-info">
+                        <div class="avatar" th:text="${#strings.toUpperCase(#strings.substring(#authentication.name, 0, 1))}">U</div>
+                        <div class="user-details">
+                            <div class="user-name">
+                                <span th:text="${#authentication.name}">Username</span>
+                                <span sec:authorize="hasRole('ADMIN')" class="admin-badge">ADMIN</span>
+                            </div>
+                            <div class="user-status" data-i18n="home.online">Online</div>
+                        </div>
+                    </div>
+
+                    <div class="btn-group">
+                        <a id="btnLastPlayedCard" href="#" class="btn btn-primary" style="display: none;">
+                            <span>🎮</span> <span id="lastPlayedCityNameCard">Continue Playing</span>
+                        </a>
+                        <button class="btn btn-secondary" onclick="openCitiesModal()">
+                            <span>🏙️</span> My Cities
+                        </button>
+                        <form th:action="@{/logout}" method="post" style="margin: 0;">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                            <button type="submit" class="btn btn-danger" style="width: 100%;" data-i18n="common.logout">Logout</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Not logged in -->
+        <div th:if="${#authorization.expression('isAnonymous()')}">
+            <nav class="nav-bar">
+                <a href="/login" class="nav-link" data-i18n="common.login">Login</a>
+                <a href="/signup" class="nav-link primary" data-i18n="common.signup">Sign Up</a>
+            </nav>
+
+            <div class="main-content">
+                <div class="card">
+                    <h2 data-i18n="home.welcomeMayor">Welcome, Mayor!</h2>
+                    <p data-i18n="home.description">Build and manage your own city. Create roads, develop infrastructure, and watch your city grow!</p>
+                    <div class="btn-group">
+                        <a href="/signup" class="btn btn-primary" data-i18n="home.startBuilding">Start Building</a>
+                        <a href="/login" class="btn btn-secondary" data-i18n="home.alreadyHaveCity">Already have a city? Login</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logout message -->
+        <div th:if="${param.logout}" class="main-content" style="margin-top: 20px;">
+            <div class="alert alert-success" data-i18n="home.logoutSuccess">
+                Successfully logged out. See you next time, Mayor!
+            </div>
+        </div>
+
+        <footer class="footer">
+            <p>City Builder &copy; 2024</p>
+        </footer>
+    </div>
+
+    <!-- Cities Modal -->
+    <div id="citiesModal" class="modal-overlay" onclick="closeCitiesModalOutside(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>🏙️ <span data-i18n="home.myCities">My Cities</span></h2>
+                <button class="modal-close" onclick="closeCitiesModal()">&times;</button>
+            </div>
+
+            <div class="city-count">
+                <span data-i18n="home.cityCount">Cities:</span> <strong id="cityCount">0</strong> / <strong>5</strong>
+            </div>
+
+            <div id="cityListContainer" class="city-list">
+                <div class="loading" data-i18n="common.loading">Loading</div>
+            </div>
+
+            <div class="create-city-section" id="createCitySection">
+                <h3>➕ <span data-i18n="home.createNewCity">Create New City</span></h3>
+                <form class="create-city-form" onsubmit="createCity(event)">
+                    <input type="text" id="newCityName" placeholder="New city name" data-i18n-placeholder="home.newCityName" maxlength="30" required>
+                    <button type="submit" id="createCityBtn" data-i18n="home.create">Create</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script th:inline="javascript">
+        const currentUsername = [[${#authentication?.name}]];
+        const csrfToken = [[${_csrf.token}]];
+        const csrfHeader = [[${_csrf.headerName}]];
+
+        let citiesData = [];
+
+        function openCitiesModal() {
+            document.getElementById('citiesModal').classList.add('active');
+            loadCities();
+        }
+
+        function closeCitiesModal() {
+            document.getElementById('citiesModal').classList.remove('active');
+        }
+
+        function closeCitiesModalOutside(event) {
+            if (event.target.id === 'citiesModal') {
+                closeCitiesModal();
+            }
+        }
+
+        async function loadCities() {
+            const container = document.getElementById('cityListContainer');
+            container.innerHTML = '<div class="loading">Loading</div>';
+
+            try {
+                const response = await fetch(`/api/map/${currentUsername}/cities`);
+                if (!response.ok) throw new Error('Failed to load cities');
+
+                citiesData = await response.json();
+                renderCities();
+            } catch (error) {
+                console.error('Error loading cities:', error);
+                container.innerHTML = '<div class="empty-state"><span>❌</span><p>Failed to load cities.</p></div>';
+            }
+        }
+
+        function renderCities() {
+            const container = document.getElementById('cityListContainer');
+            const countEl = document.getElementById('cityCount');
+            const createSection = document.getElementById('createCitySection');
+
+            countEl.textContent = citiesData.length;
+
+            if (citiesData.length >= 5) {
+                createSection.style.display = 'none';
+            } else {
+                createSection.style.display = 'block';
+            }
+
+            if (citiesData.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <span>🏗️</span>
+                        <p data-i18n="home.noCities">No cities yet. Create your first city!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = citiesData.map((city, index) => {
+                const cityName = (city.cityName && city.cityName.trim()) || 'My City';
+                return `
+                <div class="city-item">
+                    <div class="city-info">
+                        <div class="city-icon">🏙️</div>
+                        <div class="city-details">
+                            <h3>${escapeHtml(cityName)}</h3>
+                            <span>💰 ${formatMoney(city.money)} · 👥 ${city.population || 0}</span>
+                        </div>
+                    </div>
+                    <div class="city-actions">
+                        <a href="/${currentUsername}/${encodeURIComponent(cityName)}" class="city-btn city-btn-enter" data-i18n="home.enter">Enter</a>
+                        ${citiesData.length > 1 ? `
+                            <button class="city-btn city-btn-delete" onclick="deleteCity('${escapeHtml(cityName)}')" data-i18n="home.delete">Delete</button>
+                        ` : ''}
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        async function createCity(event) {
+            event.preventDefault();
+
+            const nameInput = document.getElementById('newCityName');
+            const cityName = nameInput.value.trim();
+            const btn = document.getElementById('createCityBtn');
+
+            if (!cityName) return;
+
+            btn.disabled = true;
+            btn.textContent = 'Creating...';
+
+            try {
+                const response = await fetch(`/api/map/${currentUsername}/cities`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        [csrfHeader]: csrfToken
+                    },
+                    body: JSON.stringify({ cityName })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to create city');
+                }
+
+                nameInput.value = '';
+                loadCities();
+
+                if (confirm(`"${result.cityName}" has been created. Go to city?`)) {
+                    window.location.href = `/${currentUsername}/${encodeURIComponent(result.cityName)}`;
+                }
+            } catch (error) {
+                console.error('Error creating city:', error);
+                alert(error.message || 'Failed to create city.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Create';
+            }
+        }
+
+        async function deleteCity(cityName) {
+            if (!confirm('Are you sure you want to delete this city? This cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/map/${currentUsername}/${encodeURIComponent(cityName)}`, {
+                    method: 'DELETE',
+                    headers: {
+                        [csrfHeader]: csrfToken
+                    }
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to delete city');
+                }
+
+                loadCities();
+            } catch (error) {
+                console.error('Error deleting city:', error);
+                alert(error.message || 'Failed to delete city.');
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatMoney(amount) {
+            if (amount >= 1000000) {
+                return (amount / 1000000).toFixed(1) + 'M';
+            } else if (amount >= 1000) {
+                return (amount / 1000).toFixed(1) + 'K';
+            }
+            return amount?.toLocaleString() || '0';
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeCitiesModal();
+            }
+        });
+
+        function formatLastPlayedTime(dateString) {
+            if (!dateString) return '';
+
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 7) return `${diffDays}d ago`;
+
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+
+        async function loadLastPlayedCity() {
+            if (!currentUsername) return;
+
+            try {
+                const response = await fetch(`/api/map/${currentUsername}/last-played`);
+                if (!response.ok) return;
+
+                const data = await response.json();
+                if (data.exists && data.cityName) {
+                    const cityUrl = `/${currentUsername}/${encodeURIComponent(data.cityName)}`;
+
+                    const btnLastPlayed = document.getElementById('btnLastPlayed');
+                    if (btnLastPlayed) {
+                        btnLastPlayed.href = cityUrl;
+                        btnLastPlayed.style.display = 'inline-flex';
+                        document.getElementById('lastPlayedCityName').textContent = data.cityName;
+
+                        const details = [];
+                        if (data.lastPlayedAt) {
+                            details.push(formatLastPlayedTime(data.lastPlayedAt));
+                        }
+                        details.push(`💰${formatMoney(data.money)}`);
+                        details.push(`👥${data.population || 0}`);
+
+                        document.getElementById('lastPlayedDetails').textContent = details.join(' · ');
+                    }
+
+                    const btnLastPlayedCard = document.getElementById('btnLastPlayedCard');
+                    if (btnLastPlayedCard) {
+                        btnLastPlayedCard.href = cityUrl;
+                        btnLastPlayedCard.style.display = 'flex';
+                        document.getElementById('lastPlayedCityNameCard').textContent = `Continue: ${data.cityName}`;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load last played city:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadLastPlayedCity);
+    </script>
+</body>
+</html>

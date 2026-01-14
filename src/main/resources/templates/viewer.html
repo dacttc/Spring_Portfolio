@@ -1,0 +1,1065 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Three.js GLTF Viewer + L-Road Placement</title>
+
+    <!-- ===================== -->
+    <!-- STYLE -->
+    <!-- ===================== -->
+    <style>
+        html, body {
+            margin: 0;
+            height: 100%;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* HUD */
+        #hud {
+            position: fixed;
+            top: 120px;
+            left: 16px;
+            z-index: 9999;
+            pointer-events: none;
+        }
+
+        .hud-card {
+            pointer-events: auto;
+            background: rgba(20, 22, 28, 0.82);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            color: #fff;
+            border-radius: 16px;
+            padding: 12px 14px;
+            min-width: 220px;
+            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+        }
+
+        .hud-label {
+            font-size: 12px;
+            opacity: 0.75;
+        }
+
+        .hud-money {
+            margin-top: 4px;
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            font-weight: 800;
+            font-size: 26px;
+            letter-spacing: -0.5px;
+        }
+
+        .coin {
+            opacity: 0.9;
+            font-size: 18px;
+            transform: translateY(-1px);
+        }
+
+        .hud-sub {
+            margin-top: 6px;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .money-flash {
+            animation: flash 0.35s ease;
+        }
+
+        @keyframes flash {
+            0%   { transform: translateY(0);   filter: brightness(1); }
+            50%  { transform: translateY(-1px); filter: brightness(1.35); }
+            100% { transform: translateY(0);   filter: brightness(1); }
+        }
+
+        /* Toast */
+        #toastRoot {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        }
+
+        .toast {
+            width: 320px;
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 16px;
+            box-shadow: 0 16px 44px rgba(0, 0, 0, 0.22);
+            overflow: hidden;
+            transform: translateY(-6px);
+            opacity: 0;
+            animation: toastIn 0.18s ease forwards;
+        }
+
+        @keyframes toastIn {
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .toast.out {
+            animation: toastOut 0.18s ease forwards;
+        }
+
+        @keyframes toastOut {
+            to {
+                transform: translateY(-6px);
+                opacity: 0;
+            }
+        }
+
+        .toast .bar {
+            height: 4px;
+            background: linear-gradient(90deg, #ff4d4d, #ff8a3d);
+        }
+
+        .toast .body {
+            padding: 12px 14px;
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .toast .icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            background: rgba(255, 77, 77, 0.14);
+            color: #ff2d2d;
+            font-weight: 900;
+        }
+
+        .toast .title {
+            font-weight: 800;
+            font-size: 14px;
+            color: #111827;
+        }
+
+        .toast .desc {
+            margin-top: 2px;
+            font-size: 12px;
+            color: rgba(17, 24, 39, 0.7);
+            line-height: 1.35;
+        }
+
+        /* UI */
+        #hint {
+            position: fixed;
+            left: 12px;
+            top: 12px;
+            padding: 8px 10px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.55);
+            color: #fff;
+            font-size: 12px;
+            z-index: 10;
+            user-select: none;
+        }
+
+        #ui {
+            position: fixed;
+            left: 12px;
+            top: 56px;
+            display: flex;
+            gap: 8px;
+            z-index: 20;
+        }
+
+        #ui button {
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            background: rgba(255, 255, 255, 0.9);
+            cursor: pointer;
+            font-size: 13px;
+            user-select: none;
+        }
+
+        #ui button.active {
+            background: rgba(0, 0, 0, 0.85);
+            color: #fff;
+            border-color: rgba(0, 0, 0, 0.85);
+        }
+    </style>
+
+    <!-- ===================== -->
+    <!-- IMPORT MAP -->
+    <!-- ===================== -->
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+          }
+        }
+    </script>
+</head>
+
+<body>
+<div id="hint">카메라 모드</div>
+
+<div id="ui">
+    <button id="btnCam" class="active">카메라 모드</button>
+    <button id="btnBuild">도로 설치 모드</button>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+    <div class="hud-card">
+        <div class="hud-label">자금</div>
+        <div class="hud-money">
+            <span class="coin">₩</span>
+            <span id="moneyText">0</span>
+        </div>
+        <div class="hud-sub">
+            도로 1m 비용:
+            <b id="costPerMeterText">0</b>
+        </div>
+    </div>
+</div>
+
+<div id="toastRoot"></div>
+<canvas id="c"></canvas>
+
+<!-- ===================== -->
+<!-- SCRIPT -->
+<!-- ===================== -->
+<script type="module">
+    const GRID_W = 48;
+    const GRID_H = 48;
+    const TILE_SIZE = 1;
+    const ORIGIN_X = -GRID_W / 2;
+    const ORIGIN_Z = -GRID_H / 2;
+    const roadCenterOffset = {
+        straight: new THREE.Vector3(),
+        corner:   new THREE.Vector3(),
+        t:        new THREE.Vector3(),
+        cross:    new THREE.Vector3(),
+    };
+
+    import * as THREE from "three";
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    const loader = new GLTFLoader();
+    /* =========================================================
+     * 0) DOM REFERENCES
+     * ========================================================= */
+    const moneyText = document.getElementById("moneyText");
+    const costPerMeterText = document.getElementById("costPerMeterText");
+    const hudCard = document.querySelector(".hud-card");
+    const toastRoot = document.getElementById("toastRoot");
+
+    const canvas = document.querySelector("#c");
+    const btnCam = document.getElementById("btnCam");
+    const btnBuild = document.getElementById("btnBuild");
+    const hint = document.getElementById("hint");
+
+    /* =========================================================
+     * 1) ECONOMY (Money / Cost)
+     * ========================================================= */
+    const economy = {
+        money: 5000,            // 시작 자금
+        roadCostPerMeter: 25,   // 도로 1m 비용
+    };
+
+    function formatMoney(n) {
+        return Math.max(0, Math.floor(n)).toLocaleString("ko-KR");
+    }
+
+    function renderMoney() {
+        moneyText.textContent = formatMoney(economy.money);
+        costPerMeterText.textContent = formatMoney(economy.roadCostPerMeter);
+    }
+
+    function flashMoney() {
+        hudCard.classList.remove("money-flash");
+        // reflow
+        void hudCard.offsetWidth;
+        hudCard.classList.add("money-flash");
+    }
+
+    function canSpend(amount) {
+        return economy.money >= amount;
+    }
+
+    function toast({ title, desc, ms = 2200 }) {
+        const el = document.createElement("div");
+        el.className = "toast";
+
+        // ✅ 원본 코드에서 백틱/문자열이 깨져 있었던 부분만 "문법상" 정리 (동일 내용)
+        el.innerHTML = `
+    <div class="bar"></div>
+    <div class="body">
+      <div class="icon">!</div>
+      <div>
+        <div class="title">${title}</div>
+        <div class="desc">${desc}</div>
+      </div>
+    </div>
+  `;
+
+        toastRoot.appendChild(el);
+
+        setTimeout(() => {
+            el.classList.add("out");
+            setTimeout(() => el.remove(), 220);
+        }, ms);
+    }
+
+    function trySpend(amount, reasonText) {
+        if (!canSpend(amount)) {
+            toast({
+                title: "자금이 부족해요",
+                desc: `${reasonText}에 ${formatMoney(amount)}원이 필요합니다. 현재 ${formatMoney(economy.money)}원 보유 중이에요.`,
+            });
+            return false;
+        }
+
+        economy.money -= amount;
+        renderMoney();
+        flashMoney();
+        return true;
+    }
+
+    function calcRoadCostByLengthMeters(lengthMeters) {
+        return Math.ceil(lengthMeters * economy.roadCostPerMeter);
+    }
+
+    function onConfirmBuildRoad(roadLengthMeters) {
+        const cost = calcRoadCostByLengthMeters(roadLengthMeters);
+        const ok = trySpend(cost, `도로(길이 ${roadLengthMeters.toFixed(1)}m) 건설`);
+        if (!ok) return false;
+
+        // ✅ 여기서 실제 도로 생성 확정 로직 실행
+        // buildRoadCommit();
+        return true;
+    }
+
+    renderMoney();
+    const ROAD_MODELS = {
+        straight: "/models/roads/road_straight/road_straight.gltf",
+        corner:   "/models/roads/road_corner/road_corner.gltf",
+        t:        "/models/roads/road_t/road_t.gltf",
+        cross:    "/models/roads/road_cross/road_cross.gltf",
+    };
+
+    const roadPrefabs = {
+        straight: null,
+        corner: null,
+        t: null,
+        cross: null,
+    };
+
+    const roadMinY = { straight: 0, corner: 0, t: 0, cross: 0 };
+
+    function loadRoadPrefab(key, url) {
+        return new Promise((resolve, reject) => {
+            loader.load(url, (gltf) => {
+                const prefab = gltf.scene;
+                prefab.scale.set(0.04, 0.04, 0.04);
+
+                // ✅ 스케일 포함 minY 계산
+                prefab.updateMatrixWorld(true);
+                const box = new THREE.Box3().setFromObject(prefab);
+
+                roadPrefabs[key] = prefab;
+                roadMinY[key] = box.min.y;
+                resolve();
+            }, undefined, reject);
+        });
+    }
+
+    // 시작 시 4종 미리 로드
+    await Promise.all([
+        loadRoadPrefabFitToTile("straight", ROAD_MODELS.straight),
+        loadRoadPrefabFitToTile("corner",   ROAD_MODELS.corner),
+        loadRoadPrefabFitToTile("t",        ROAD_MODELS.t),
+        loadRoadPrefabFitToTile("cross",    ROAD_MODELS.cross),
+    ]);
+
+    const DIR = {
+        N: { dx: 0, dy: -1, bit: 1 },
+        E: { dx: 1, dy: 0,  bit: 2 },
+        S: { dx: 0, dy: 1,  bit: 4 },
+        W: { dx: -1,dy: 0,  bit: 8 },
+    };
+
+    function inBounds(x, y) {
+        return x >= 0 && y >= 0 && x < GRID_W && y < GRID_H;
+    }
+
+    function isAnyRoad(x, y) {
+        if (!inBounds(x, y)) return false;
+        return isRoad(x, y); // 네 코드의 isRoad 사용(LOCKED 포함)
+    }
+
+    function getRoadMask(x, y) {
+        if (!isAnyRoad(x, y)) return 0;
+
+        let m = 0;
+        if (isAnyRoad(x + DIR.N.dx, y + DIR.N.dy)) m |= DIR.N.bit;
+        if (isAnyRoad(x + DIR.E.dx, y + DIR.E.dy)) m |= DIR.E.bit;
+        if (isAnyRoad(x + DIR.S.dx, y + DIR.S.dy)) m |= DIR.S.bit;
+        if (isAnyRoad(x + DIR.W.dx, y + DIR.W.dy)) m |= DIR.W.bit;
+        return m;
+    }
+    function pickRoadVariant(mask) {
+        // 연결 개수
+        const count =
+            ((mask & 1) ? 1 : 0) +
+            ((mask & 2) ? 1 : 0) +
+            ((mask & 4) ? 1 : 0) +
+            ((mask & 8) ? 1 : 0);
+
+        // 0~1개 연결: 그냥 직선(혹은 데드엔드 모델이 없으니 직선으로 처리)
+        if (count <= 1) {
+            // 한쪽으로만 이어지면 방향 맞춰서 직선 회전
+            // N/S면 세로(0), E/W면 가로(90도)
+            const rot = (mask === 2 || mask === 8) ? Math.PI  : Math.PI / 2;
+            return { key: "straight", rotY: rot };
+        }
+
+        // 4개 연결: 사거리
+        if (count === 4) return { key: "cross", rotY: 0 };
+
+        // 3개 연결: 삼거리 (막힌 방향을 찾아 회전)
+        if (count === 3) {
+            // 기본 T: N+E+W (mask=1+2+8=11) => 아래(S)가 비어있음
+            // 비어있는 방향에 맞춰 회전
+            if (!(mask & 4)) return { key: "t", rotY: 0 };               // S 비어있음
+            if (!(mask & 2)) return { key: "t", rotY: Math.PI / 2 };     // W 비어있음
+            if (!(mask & 1)) return { key: "t", rotY: Math.PI };         // N 비어있음
+            if (!(mask & 8)) return { key: "t", rotY: -Math.PI / 2 };    // E 비어있음
+        }
+
+        // 2개 연결: 직선 or 코너
+        if (count === 2) {
+            // 직선: N+S(1+4=5) 또는 E+W(2+8=10)
+            if (mask === 10) return { key: "straight", rotY: 0 };              // 세로
+            if (mask === 5) return { key: "straight", rotY: Math.PI / 2 };   // 가로
+
+            // 코너: 기본 corner를 N+E(1+2=3)로 가정
+            if (mask === 9)  return { key:"corner", rotY:0 };                // E+S
+            if (mask === 12) return { key:"corner", rotY:Math.PI/2 };        // S+W
+            if (mask === 6)  return { key:"corner", rotY:Math.PI };          // W+N
+            if (mask === 3)  return { key:"corner", rotY:-Math.PI/2 };       // N+E
+        }
+
+        // fallback
+        return { key: "straight", rotY: 0 };
+    }
+    function clearRoadGroup() {
+        for (let i = roadGroup.children.length - 1; i >= 0; i--) {
+            roadGroup.remove(roadGroup.children[i]);
+        }
+    }
+
+    function addRoadModelAt(x, y, key, rotY) {
+        const prefab = roadPrefabs[key];
+        if (!prefab) return;
+
+        const tile = prefab.clone(true);
+        const c = tileToWorldCenter(x, y);
+
+        // 1️⃣ 먼저 타일 중심에 둔다
+        tile.position.set(c.x, 0, c.z);
+        tile.rotation.y = rotY;
+
+        tile.updateMatrixWorld(true);
+
+        // 2️⃣ 바닥 스냅
+        tile.position.y -= roadMinY[key];
+
+        // 3️⃣ 중심 보정 (🔥 핵심)
+        const offset = roadCenterOffset[key].clone();
+        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotY);
+
+        tile.position.x -= offset.x;
+        tile.position.z -= offset.z;
+
+        // 4️⃣ 미세 띄움
+        tile.position.y += 0.001;
+
+        roadGroup.add(tile);
+    }
+
+
+    function rebuildRoadModels() {
+        clearRoadGroup();
+
+        for (let x = 0; x < GRID_W; x++) {
+            for (let y = 0; y < GRID_H; y++) {
+                if (!isRoad(x, y)) continue; // LOCKED 포함이면 isAnyRoad로
+
+                const mask = getRoadMask(x, y);
+                const { key, rotY } = pickRoadVariant(mask);
+                addRoadModelAt(x, y, key, rotY);
+            }
+        }
+    }
+
+
+    /* =========================================================
+     * 2) GLTF ROAD PREFAB (optional)
+     * ========================================================= */
+    let roadPrefab = null;
+    let roadPrefabMinY = 0;
+
+    loader.load("/models/roads/road_corner/road_corner.gltf", (gltf) => {
+        roadPrefab = gltf.scene;
+        roadPrefab.scale.set(0.04, 0.04, 0.04);
+
+        // ✅ 중요: 바운딩 계산 전에 월드 행렬 갱신
+        roadPrefab.updateMatrixWorld(true);
+
+        const box = new THREE.Box3().setFromObject(roadPrefab);
+        roadPrefabMinY = box.min.y; // 월드 기준 minY(스케일 포함)
+    });
+
+
+    /* =========================================================
+     * 3) THREE BASICS (Scene / Renderer / Camera / Lights)
+     * ========================================================= */
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#ffffff");
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 200);
+    camera.position.set(0, 12, 18);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+
+    controls.zoomSpeed = 0.25;     // ✅ 너무 작게 하지 말기
+    controls.minDistance = 6;      // ✅ 너무 가까이 못 가게
+    controls.maxDistance = 60;     // ✅ 너무 멀리 못 가게
+
+    controls.target.set(0, 0, 0);  // ✅ 원점/그리드 중앙
+    controls.update();
+
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
+    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+    dir.position.set(3, 5, 2);
+    scene.add(dir);
+
+    /* =========================================================
+     * 4) GRID / WORLD SETTINGS
+     * ========================================================= */
+
+    const CELL = {
+        EMPTY: 0,
+        ROAD: 1,
+        LOCKED_ROAD: 2,
+    };
+
+    const grid = Array.from({ length: GRID_W }, () =>
+        Array(GRID_H).fill(CELL.EMPTY)
+    );
+
+    const blocked = Array.from({ length: GRID_W }, () =>
+        Array(GRID_H).fill(0)
+    );
+
+    // 테스트용 장애물(원하면 지워)
+    blocked[10][10] = 1;
+
+    function tileToWorldCenter(x, y) {
+        return {
+            x: (ORIGIN_X + x + 0.5) * TILE_SIZE,
+            z: (ORIGIN_Z + y + 0.5) * TILE_SIZE,
+        };
+    }
+
+    function worldToTile(wx, wz) {
+        const gx = Math.floor(wx / TILE_SIZE - ORIGIN_X);
+        const gy = Math.floor(wz / TILE_SIZE - ORIGIN_Z);
+
+        if (gx < 0 || gy < 0 || gx >= GRID_W || gy >= GRID_H) return null;
+        return { x: gx, y: gy };
+    }
+
+    function isRoad(x, y) {
+        const v = grid[x][y];
+        return v === CELL.ROAD || v === CELL.LOCKED_ROAD;
+    }
+
+    function isLocked(x, y) {
+        return grid[x][y] === CELL.LOCKED_ROAD;
+    }
+
+    function isBlocked(x, y) {
+        return blocked[x][y] === 1;
+    }
+
+    /* =========================================================
+     * 5) WORLD MESHES (Ground / GridHelper)
+     * ========================================================= */
+    const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(GRID_W * TILE_SIZE, GRID_H * TILE_SIZE),
+        new THREE.MeshStandardMaterial({ color: 0xf6f6f6 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0;
+    scene.add(ground);
+
+    const gridHelper = new THREE.GridHelper(
+        GRID_W * TILE_SIZE,
+        GRID_W,
+        0xdddddd,
+        0xeeeeee
+    );
+    gridHelper.position.y = 0.001;
+    scene.add(gridHelper);
+
+    /* =========================================================
+     * 6) ROAD INSTANCING (Player / Locked / Preview)
+     * ========================================================= */
+    const roadGeo = new THREE.BoxGeometry(TILE_SIZE, 0.08, TILE_SIZE);
+
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0x666666 });
+    const roadMesh = new THREE.InstancedMesh(roadGeo, roadMat, GRID_W * GRID_H);
+    roadMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(roadMesh);
+
+    const lockedMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
+    const lockedRoadMesh = new THREE.InstancedMesh(
+        roadGeo,
+        lockedMat,
+        GRID_W * GRID_H
+    );
+    lockedRoadMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(lockedRoadMesh);
+
+    const previewMat = new THREE.MeshStandardMaterial({
+        color: 0x00aa88,
+        transparent: true,
+        opacity: 0.35,
+    });
+    const previewMesh = new THREE.InstancedMesh(
+        roadGeo,
+        previewMat,
+        GRID_W * GRID_H
+    );
+    previewMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(previewMesh);
+    // GLTF 렌더를 메인으로 쓸 때
+    roadMesh.visible = false;
+    lockedRoadMesh.visible = false;
+
+    // 프리뷰는 계속 쓰고 싶으면 이것만 켜두기
+    previewMesh.visible = true;
+    /* =========================================================
+     * 7) GHOST TILE (Hover Highlight)
+     * ========================================================= */
+    const ghost = new THREE.Mesh(
+        new THREE.BoxGeometry(TILE_SIZE, 0.08, TILE_SIZE),
+        new THREE.MeshStandardMaterial({ transparent: true, opacity: 0.35 })
+    );
+    ghost.visible = false;
+    scene.add(ghost);
+
+    const tmp = new THREE.Object3D();
+
+    /* =========================================================
+     * 8) ROAD STATE MUTATION & REBUILD
+     * ========================================================= */
+    function buildOuterRingRoad() {
+        for (let x = 0; x < GRID_W; x++) {
+            grid[x][0] = CELL.LOCKED_ROAD;
+            grid[x][GRID_H - 1] = CELL.LOCKED_ROAD;
+        }
+        for (let y = 0; y < GRID_H; y++) {
+            grid[0][y] = CELL.LOCKED_ROAD;
+            grid[GRID_W - 1][y] = CELL.LOCKED_ROAD;
+        }
+    }
+
+    function rebuildRoadInstances() {
+        let playerCount = 0;
+        let lockedCount = 0;
+
+        for (let x = 0; x < GRID_W; x++) {
+            for (let y = 0; y < GRID_H; y++) {
+                const v = grid[x][y];
+                if (v === CELL.EMPTY) continue;
+
+                const c = tileToWorldCenter(x, y);
+                tmp.position.set(c.x, 0.04, c.z);
+                tmp.rotation.set(0, 0, 0);
+                tmp.updateMatrix();
+
+                if (v === CELL.LOCKED_ROAD) {
+                    lockedRoadMesh.setMatrixAt(lockedCount++, tmp.matrix);
+                } else {
+                    roadMesh.setMatrixAt(playerCount++, tmp.matrix);
+                }
+            }
+        }
+
+        roadMesh.count = playerCount;
+        roadMesh.instanceMatrix.needsUpdate = true;
+
+        lockedRoadMesh.count = lockedCount;
+        lockedRoadMesh.instanceMatrix.needsUpdate = true;
+    }
+
+    function setRoad(x, y, place) {
+        if (isLocked(x, y)) return;
+        if (isBlocked(x, y)) return;
+        grid[x][y] = place ? CELL.ROAD : CELL.EMPTY;
+    }
+
+    function setPreviewPath(path, ok = true) {
+        if (!path) {
+            previewMesh.count = 0;
+            previewMesh.instanceMatrix.needsUpdate = true;
+            return;
+        }
+
+        previewMesh.material.color.set(ok ? 0x00aa88 : 0xcc3333);
+
+        let n = 0;
+        for (const t of path) {
+            const c = tileToWorldCenter(t.x, t.y);
+            tmp.position.set(c.x, 0.04, c.z);
+            tmp.rotation.set(0, 0, 0);
+            tmp.updateMatrix();
+            previewMesh.setMatrixAt(n++, tmp.matrix);
+        }
+
+        previewMesh.count = n;
+        previewMesh.instanceMatrix.needsUpdate = true;
+    }
+
+    /* =========================================================
+     * 9) GLTF ROAD PLACEMENT (optional)
+     * ========================================================= */
+    const roadGroup = new THREE.Group();
+    scene.add(roadGroup);
+    roadMesh.visible = false;
+    lockedRoadMesh.visible = false;
+    // previewMesh는 그대로 사용
+
+
+    /* =========================================================
+     * 10) L-PATH (Compute / Validate / Pick)
+     * ========================================================= */
+    function buildLPath(a, b, xThenY = true) {
+        const path = [];
+        const ax = a.x, ay = a.y, bx = b.x, by = b.y;
+
+        if (xThenY) {
+            const sx = bx >= ax ? 1 : -1;
+            for (let x = ax; x !== bx + sx; x += sx) path.push({ x, y: ay });
+
+            const sy = by >= ay ? 1 : -1;
+            for (let y = ay + sy; y !== by + sy; y += sy) path.push({ x: bx, y });
+        } else {
+            const sy = by >= ay ? 1 : -1;
+            for (let y = ay; y !== by + sy; y += sy) path.push({ x: ax, y });
+
+            const sx = bx >= ax ? 1 : -1;
+            for (let x = ax + sx; x !== bx + sx; x += sx) path.push({ x, y: by });
+        }
+
+        return path;
+    }
+
+    function isPathBuildable(path) {
+        for (const t of path) {
+            if (t.x < 0 || t.y < 0 || t.x >= GRID_W || t.y >= GRID_H) return false;
+            if (isBlocked(t.x, t.y)) return false;
+        }
+        return true;
+    }
+
+    function pickBestLPath(a, b) {
+        const p1 = buildLPath(a, b, true);
+        if (isPathBuildable(p1)) return p1;
+
+        const p2 = buildLPath(a, b, false);
+        if (isPathBuildable(p2)) return p2;
+
+        return null;
+    }
+
+    /* =========================================================
+     * 11) INPUT (Raycast / Hover / Drag Build)
+     * ========================================================= */
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    let hovered = null;     // {x,y} or null
+    let buildStart = null;  // {x,y} or null
+    let currentPath = null; // [{x,y}...] or null
+
+    function updateMouseFromEvent(e) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    }
+
+    function updateHovered(e) {
+        updateMouseFromEvent(e);
+        raycaster.setFromCamera(mouse, camera);
+
+        const hits = raycaster.intersectObject(ground, false);
+        if (!hits.length) return null;
+
+        const p = hits[0].point;
+        return worldToTile(p.x, p.z);
+    }
+    renderer.domElement.addEventListener("pointermove", (e) => {
+        if (currentMode !== MODE.BUILD) {
+            hovered = null;
+            ghost.visible = false;
+            setPreviewPath(null);
+            return;
+        }
+
+        const t = updateHovered(e);
+        if (!t) {
+            hovered = null;
+            ghost.visible = false;
+            setPreviewPath(null);
+            return;
+        }
+
+        hovered = t;
+
+        // ghost 표시
+        const c = tileToWorldCenter(t.x, t.y);
+        ghost.position.set(c.x, 0.04, c.z);
+        ghost.visible = true;
+
+        // ghost 색
+        if (isLocked(t.x, t.y)) ghost.material.color.set(0xffcc00);
+        else if (isBlocked(t.x, t.y)) ghost.material.color.set(0xff3366);
+        else if (isRoad(t.x, t.y)) ghost.material.color.set(0xcc3333);
+        else ghost.material.color.set(0x00aa88);
+
+        // 시작점 있으면 프리뷰 경로
+        if (buildStart) {
+            currentPath = pickBestLPath(buildStart, hovered);
+            setPreviewPath(currentPath, !!currentPath);
+        } else {
+            setPreviewPath(null);
+        }
+    });
+    async function loadRoadPrefabFitToTile(key, url) {
+        return new Promise((resolve, reject) => {
+            loader.load(url, (gltf) => {
+                const prefab = gltf.scene;
+
+                // 1) 우선 임시로 1 스케일
+                prefab.scale.set(1, 1, 1);
+                prefab.updateMatrixWorld(true);
+
+                // 2) 원본 모델의 바운딩 측정
+                const box0 = new THREE.Box3().setFromObject(prefab);
+                const size0 = new THREE.Vector3();
+                box0.getSize(size0);
+
+                // 모델이 어떤 축으로 뻗어있든, 도로 타일은 XZ 평면에서 1칸을 채워야 함
+                const modelW = size0.x;
+                const modelD = size0.z;
+
+                // 3) TILE_SIZE에 맞게 등방 스케일 계산 (가로/세로 중 큰 쪽 기준)
+                const s = TILE_SIZE / Math.max(modelW, modelD);
+
+                prefab.scale.setScalar(s);
+                prefab.updateMatrixWorld(true);
+
+                // 4) 스케일 적용 후 minY 저장(바닥 스냅용)
+                const box = new THREE.Box3().setFromObject(prefab);
+
+                roadPrefabs[key] = prefab;
+                roadMinY[key] = box.min.y;
+                const center = new THREE.Vector3();
+                box.getCenter(center);
+
+// XZ만 사용 (Y는 바닥 스냅에서 처리)
+                roadCenterOffset[key].set(center.x, 0, center.z);
+                console.log(`[${key}] model size(before)`, {
+                    w: modelW.toFixed(3),
+                    d: modelD.toFixed(3),
+                    scale: s.toFixed(6),
+                });
+
+                resolve();
+            }, undefined, reject);
+        });
+    }
+
+    renderer.domElement.addEventListener("pointerup", (e) => {
+        if (currentMode !== MODE.BUILD) return;
+        if (!buildStart) return;
+        if (!hovered) {
+            buildStart = null;
+            currentPath = null;
+            setPreviewPath(null);
+            return;
+        }
+
+        currentPath = pickBestLPath(buildStart, hovered);
+        if (!currentPath) {
+            buildStart = null;
+            currentPath = null;
+            setPreviewPath(null);
+            return;
+        }
+
+        // ✅ 설치 확정: 그리드만 업데이트
+        for (const t of currentPath) setRoad(t.x, t.y, true);
+
+        // ✅ GLTF 타일을 연결 상태에 맞게 한 번에 재생성
+        rebuildRoadModels();
+
+        // 프리뷰 종료
+        buildStart = null;
+        currentPath = null;
+        setPreviewPath(null);
+    });
+
+
+    renderer.domElement.addEventListener("pointerdown", (e) => {
+        if (currentMode !== MODE.BUILD) return;
+        if (e.button !== 0) return; // 좌클릭만
+        if (!hovered) return;
+
+        // 시작점 확정
+        buildStart = { x: hovered.x, y: hovered.y };
+        currentPath = pickBestLPath(buildStart, hovered);
+        setPreviewPath(currentPath, !!currentPath);
+    });
+
+    renderer.domElement.addEventListener("pointerup", (e) => {
+        if (currentMode !== MODE.BUILD) return;
+
+        // 좌클릭 드래그를 마무리할 때만 확정하고 싶으면:
+        // pointerdown에서 시작했는지(buildStart)로 판단하면 충분함.
+        if (!buildStart) return;
+
+        // hovered 없으면 취소
+        if (!hovered) {
+            buildStart = null;
+            currentPath = null;
+            setPreviewPath(null);
+            return;
+        }
+
+        currentPath = pickBestLPath(buildStart, hovered);
+
+        if (!currentPath) {
+            buildStart = null;
+            currentPath = null;
+            setPreviewPath(null);
+            return;
+        }
+
+        // ✅ 설치 확정
+        for (const t of currentPath) {
+            setRoad(t.x, t.y, true);
+        }
+        rebuildRoadInstances(); // 박스/프리뷰 유지할 거면
+        rebuildRoadModels();    // ✅ GLTF는 연결 기반으로 전체 재배치
+
+
+        buildStart = null;
+        currentPath = null;
+        setPreviewPath(null);
+    });
+
+
+    renderer.domElement.addEventListener("contextmenu", (e) => {
+        if (currentMode === MODE.BUILD) e.preventDefault();
+    });
+
+    /* =========================================================
+     * 12) MODE SYSTEM (Camera / Build)
+     * ========================================================= */
+    const MODE = { CAMERA: "camera", BUILD: "build" };
+    let currentMode = MODE.CAMERA;
+
+    function setMode(mode) {
+        currentMode = mode;
+
+        btnCam.classList.toggle("active", mode === MODE.CAMERA);
+        btnBuild.classList.toggle("active", mode === MODE.BUILD);
+
+        controls.enabled = (mode === MODE.CAMERA);
+
+        if (mode === MODE.CAMERA) {
+            hint.textContent = "카메라 모드: 드래그 회전 · 휠 줌 · 우클릭 드래그 이동";
+            ghost.visible = false;
+            setPreviewPath(null);
+            buildStart = null;
+            currentPath = null;
+        } else {
+            hint.textContent = "도로 설치 모드: 좌클릭 드래그(L자)=설치 · 장애물 있으면 설치 불가";
+        }
+    }
+
+    btnCam.addEventListener("click", () => setMode(MODE.CAMERA));
+    btnBuild.addEventListener("click", () => setMode(MODE.BUILD));
+
+    window.addEventListener("keydown", (e) => {
+        if (e.key === "1") setMode(MODE.CAMERA);
+        if (e.key === "2") setMode(MODE.BUILD);
+    });
+
+    setMode(MODE.CAMERA);
+
+    /* =========================================================
+     * 13) INIT (Outer Ring / Rebuild)
+     * ========================================================= */
+    buildOuterRingRoad();
+    rebuildRoadInstances();
+
+    /* =========================================================
+     * 14) RESIZE / LOOP
+     * ========================================================= */
+    function resize() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+    }
+
+    window.addEventListener("resize", resize);
+    resize();
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    animate();
+
+</script>
+</body>
+</html>

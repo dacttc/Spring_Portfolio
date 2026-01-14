@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(./gradlew.bat bootRun)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill /PID 412 /F)",
+      "Bash(mvnw.cmd spring-boot:run:*)",
+      "Bash(timeout /t 30 /nobreak)",
+      "Bash(ping:*)",
+      "Bash(cmd /c \"mvnw.cmd spring-boot:run\")",
+      "Bash(powershell -Command:*)",
+      "Bash(dir mvnw*)",
+      "Bash(cmd /c \"dir \"\"C:\\\\Users\\\\dactt\\\\Desktop\\\\새 폴더 \\(3\\)\\\\Spring_Portfolio-main\\\\mvnw*\"\"\")",
+      "Bash(taskkill:*)",
+      "Bash(gradlew.bat bootRun)",
+      "Bash(cmd //c \"cd /d C:\\\\Users\\\\dactt\\\\Desktop\\\\새 폴더 \\(3\\)\\\\Spring_Portfolio-main && gradlew.bat bootRun\")",
+      "Bash(timeout:*)",
+      "Bash(curl:*)",
+      "Bash(python:*)",
+      "Bash(tasklist:*)",
+      "Bash(cmd /c \"taskkill /F /IM java.exe\")",
+      "Bash(cmd /c \"taskkill /F /IM node.exe\")",
+      "Bash(./gradlew bootRun:*)",
+      "Bash(dir \"C:\\\\Users\\\\dactt\\\\Desktop\\\\새 폴더 \\(3\\)\\\\Spring_Portfolio-main\\\\src\\\\main\\\\resources\\\\static\\\\models\")",
+      "Bash(dir \"C:\\\\Users\\\\dactt\\\\Desktop\\\\새 폴더 \\(3\\)\\\\Spring_Portfolio-main\\\\src\\\\main\\\\resources\\\\static\\\\models\" /b)",
+      "Bash(dir /s /b \"C:\\\\Users\\\\dactt\\\\Desktop\\\\새 폴더 \\(3\\)\\\\Spring_Portfolio-main\\\\src\\\\main\\\\resources\\\\static\\\\models\\\\civil buildlings\")",
+      "Bash(dir /s /b \"C:\\\\Users\\\\dactt\\\\Desktop\\\\새 폴더 \\(3\\)\\\\Spring_Portfolio-main\\\\src\\\\main\\\\resources\\\\static\\\\models\")",
+      "Bash(dir \"C:\\\\Users\\\\dactt\\\\Desktop\\\\새 폴더 \\(3\\)\\\\Spring_Portfolio-main\\\\src\\\\main\\\\resources\\\\static\\\\models\" /b /s)",
+      "Bash(dir /s /b \"C:\\\\Users\\\\dactt\\\\Desktop\\\\새 폴더 \\(3\\)\\\\Spring_Portfolio-main\\\\src\\\\main\\\\resources\\\\static\\\\models\\\\cars\")",
+      "Bash(./gradlew build:*)",
+      "Bash(./gradlew compileJava:*)",
+      "Bash(wmic process:*)",
+      "Bash(./gradlew clean bootRun)",
+      "Bash(cmd /c \"taskkill /PID 30760 /F\")",
+      "Bash(powershell \"Stop-Process -Id 30760 -Force\")",
+      "Bash(powershell \"Stop-Process -Id 45196 -Force\")",
+      "Bash(dir \"C:\\\\Users\\\\dactt\\\\Desktop\\\\새 폴더 \\(3\\)\\\\Spring_Portfolio-main\\\\src\\\\main\\\\resources\\\\static\\\\models\\\\civil buildlings\\\\commerical high\\\\2x2\")"
+    ]
+  }
+}

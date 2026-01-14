@@ -1,0 +1,31 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin</title>
+</head>
+<body>
+
+<h1>관리자 페이지</h1>
+
+<p>
+    로그인 사용자:
+    <span th:text="${#authentication.name}"></span>
+</p>
+
+<div sec:authorize="hasRole('ADMIN')">
+    <p>✅ ADMIN 권한 확인 완료</p>
+</div>
+
+<a th:href="@{/}">홈으로</a>
+
+<form th:action="@{/logout}" method="post">
+    <input type="hidden"
+           th:name="${_csrf.parameterName}"
+           th:value="${_csrf.token}" />
+    <button type="submit">로그아웃</button>
+</form>
+
+</body>
+</html>

@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - City Builder</title>
+    <script src="/js/i18n.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a1628 0%, #1a2d4a 50%, #0d2137 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+
+        .bg-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(0, 191, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 191, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+        }
+
+        .glow-orb {
+            position: fixed;
+            width: 400px;
+            height: 400px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0, 212, 255, 0.15) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .glow-orb-1 { top: -100px; right: -100px; }
+        .glow-orb-2 { bottom: -150px; left: -100px; }
+
+        .login-container {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 420px;
+            padding: 20px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo h1 {
+            font-size: 2.5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #00d4ff, #00ffcc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -1px;
+        }
+
+        .logo p {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        .card {
+            background: linear-gradient(135deg, rgba(20, 40, 70, 0.9), rgba(10, 25, 50, 0.95));
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 20px;
+            padding: 40px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+
+        .card-subtitle {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.9rem;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 14px 18px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: #fff;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #00d4ff;
+            background: rgba(0, 100, 150, 0.2);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+        }
+
+        .form-input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            color: #000;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #00ffff, #00bbdd);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 212, 255, 0.4);
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 25px 0;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.85rem;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .divider span {
+            padding: 0 15px;
+        }
+
+        .signup-link {
+            text-align: center;
+        }
+
+        .signup-link a {
+            color: #00d4ff;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .signup-link a:hover {
+            text-decoration: underline;
+        }
+
+        .alert {
+            padding: 14px 18px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .alert-error {
+            background: rgba(255, 70, 70, 0.15);
+            border: 1px solid rgba(255, 70, 70, 0.3);
+            color: #ff6b6b;
+        }
+
+        .alert-success {
+            background: rgba(0, 255, 136, 0.15);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            color: #00ff88;
+        }
+
+        .alert-icon {
+            font-size: 1.2rem;
+        }
+
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            color: rgba(255, 255, 255, 0.5);
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .back-link:hover {
+            color: #00d4ff;
+        }
+
+        .remember-me {
+            margin-top: 5px;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+            user-select: none;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-right: 10px;
+            accent-color: #00d4ff;
+            cursor: pointer;
+        }
+
+        .checkbox-label:hover {
+            color: rgba(255, 255, 255, 0.9);
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-grid"></div>
+    <div class="glow-orb glow-orb-1"></div>
+    <div class="glow-orb glow-orb-2"></div>
+
+    <div class="login-container">
+        <div class="logo">
+            <h1 data-i18n="app.name">CITY BUILDER</h1>
+            <p data-i18n="home.tagline">Build Your Dream City</p>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title" data-i18n="login.welcomeBack">Welcome Back</h2>
+            <p class="card-subtitle" data-i18n="login.subtitle">Sign in to continue building your city</p>
+
+            <div th:if="${param.error}" class="alert alert-error">
+                <span class="alert-icon">!</span>
+                <span data-i18n="login.error">Invalid username or password</span>
+            </div>
+
+            <div th:if="${param.expired}" class="alert alert-error">
+                <span class="alert-icon">⚠</span>
+                <span data-i18n="login.sessionExpired">다른 기기에서 로그인하여 현재 세션이 종료되었습니다.</span>
+            </div>
+
+            <div th:if="${param.maxSession}" class="alert alert-error">
+                <span class="alert-icon">🔒</span>
+                <span data-i18n="login.alreadyLoggedIn">이 계정은 이미 다른 곳에서 로그인 중입니다. 먼저 로그아웃 해주세요.</span>
+            </div>
+
+            <div th:if="${param.verified}" class="alert alert-success">
+                <span class="alert-icon">✓</span>
+                <span data-i18n="login.emailVerified">Email verified! You can now login.</span>
+            </div>
+
+            <form method="post" action="/login">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+
+                <div class="form-group">
+                    <label class="form-label" data-i18n="login.username">Username</label>
+                    <input type="text" name="username" class="form-input" data-i18n-placeholder="login.usernamePlaceholder" placeholder="Enter your username" required />
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" data-i18n="login.password">Password</label>
+                    <input type="password" name="password" class="form-input" data-i18n-placeholder="login.passwordPlaceholder" placeholder="Enter your password" required />
+                </div>
+
+                <div class="form-group remember-me">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="remember-me" checked />
+                        <span class="checkmark"></span>
+                        <span data-i18n="login.rememberMe">Keep me logged in</span>
+                    </label>
+                </div>
+
+                <button type="submit" class="btn btn-primary" data-i18n="login.submit">Sign In</button>
+            </form>
+
+            <div class="divider"><span data-i18n="common.or">OR</span></div>
+
+            <p class="signup-link">
+                <span data-i18n="login.noAccount">Don't have an account?</span> <a href="/signup" data-i18n="common.signup">Sign up</a>
+            </p>
+        </div>
+
+        <a href="/" class="back-link" data-i18n="common.backToHome">← Back to Home</a>
+    </div>
+
+    <script th:if="${message}">alert([[${message}]]);</script>
+    <script th:if="${errorMessage}">alert([[${errorMessage}]]);</script>
+</body>
+</html>
