@@ -252,7 +252,7 @@
             <p class="card-subtitle" data-i18n="signup.subtitle">Join and start building your city today</p>
 
             <form th:action="@{/signup}" method="post">
-                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <input type="hidden" name="_csrf" th:if="${_csrf}" th:value="${_csrf.token}" />
 
                 <div class="form-group">
                     <label class="form-label" data-i18n="signup.username">Username</label>

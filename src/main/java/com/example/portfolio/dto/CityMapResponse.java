@@ -45,6 +45,9 @@ public class CityMapResponse {
     // 게임 상태 (시간/날짜)
     private final Object gameState;
 
+    // 사용된 맵 템플릿 이름
+    private final String templateName;
+
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     public CityMapResponse(CityMap cityMap, boolean isOwner) {
@@ -93,13 +96,26 @@ public class CityMapResponse {
 
         // 게임 상태 (시간/날짜)
         this.gameState = parseGameState(cityMap.getGameState());
+
+        // 템플릿 이름
+        this.templateName = cityMap.getTemplateName();
     }
 
     private int[][] parseGridData(String gridData) {
         try {
+            // 먼저 직접 2D 배열로 파싱 시도 (기존 형식)
             return objectMapper.readValue(gridData, int[][].class);
         } catch (JsonProcessingException e) {
-            return new int[48][48];
+            // 실패하면 새 형식 (tiles + env) 시도
+            try {
+                var node = objectMapper.readTree(gridData);
+                if (node.has("tiles")) {
+                    return objectMapper.treeToValue(node.get("tiles"), int[][].class);
+                }
+            } catch (JsonProcessingException ex) {
+                // 무시
+            }
+            return new int[50][50];
         }
     }
 

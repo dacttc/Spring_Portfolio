@@ -18,7 +18,7 @@ import java.util.List;
 public class CityStatsService {
 
     private final ObjectMapper objectMapper;
-    private static final int GRID_SIZE = 48;
+    private static final int GRID_SIZE = 70;
     private static final int MAX_OFFLINE_HOURS = 24;
 
     /**

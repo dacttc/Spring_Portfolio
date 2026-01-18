@@ -38,6 +38,9 @@ public class CityMap {
     @Column(columnDefinition = "TEXT")
     private String gameState;  // 게임 시간/날짜 JSON
 
+    @Column(length = 100)
+    private String templateName;  // 사용된 맵 템플릿 이름
+
     @Column(nullable = false)
     private Long money = 10000L;
 
@@ -114,11 +117,12 @@ public class CityMap {
     }
 
     public static CityMap createDefault(User user, String cityName, String slug) {
-        int[][] grid = new int[48][48];
+        int[][] grid = new int[50][50];
 
-        // 오른쪽 한 면만 잠긴 도로(2)로 설정 (4차선은 2x2 필요)
-        for (int y = 0; y < 48; y++) {
-            grid[47][y] = 2;  // LOCKED_ROAD
+        // 하단 경계도로만 (y = 48, 49) - LOCKED_ROAD_4LANE = 14
+        for (int x = 0; x < 50; x++) {
+            grid[x][48] = 14;
+            grid[x][49] = 14;
         }
 
         return CityMap.builder()
@@ -135,16 +139,29 @@ public class CityMap {
         return createDefault(user, "My City", "city-1");
     }
 
+    // 템플릿 그리드 데이터로 도시 생성
+    public static CityMap createWithGrid(User user, String cityName, String slug, String gridData, String templateName) {
+        CityMap cityMap = CityMap.builder()
+                .user(user)
+                .cityName(cityName)
+                .slug(slug)
+                .gridData(gridData)
+                .money(5000L)
+                .build();
+        cityMap.setTemplateName(templateName);
+        return cityMap;
+    }
+
     private static String convertGridToJson(int[][] grid) {
         StringBuilder sb = new StringBuilder("[");
-        for (int x = 0; x < 48; x++) {
+        for (int x = 0; x < 50; x++) {
             sb.append("[");
-            for (int y = 0; y < 48; y++) {
+            for (int y = 0; y < 50; y++) {
                 sb.append(grid[x][y]);
-                if (y < 47) sb.append(",");
+                if (y < 49) sb.append(",");
             }
             sb.append("]");
-            if (x < 47) sb.append(",");
+            if (x < 49) sb.append(",");
         }
         sb.append("]");
         return sb.toString();

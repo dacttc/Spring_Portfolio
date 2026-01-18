@@ -22,6 +22,9 @@ public class CityMapApiController {
 
     private final CityMapService cityMapService;
 
+    // 마스터 계정
+    private static final String MASTER_ACCOUNT = "dacttc";
+
     /**
      * 사용자의 첫 번째 도시 조회 (기존 호환성)
      */
@@ -157,12 +160,12 @@ public class CityMapApiController {
     }
 
     /**
-     * 새 도시 생성
+     * 새 도시 생성 (템플릿 선택 가능)
      */
     @PostMapping("/{username}/cities")
     public ResponseEntity<?> createCity(
             @PathVariable String username,
-            @RequestBody Map<String, String> request,
+            @RequestBody Map<String, Object> request,
             Principal principal) {
 
         if (principal == null) {
@@ -176,8 +179,13 @@ public class CityMapApiController {
         }
 
         try {
-            String cityName = request.getOrDefault("cityName", "New City");
-            CityMap newCity = cityMapService.createNewCity(username, cityName);
+            String cityName = (String) request.getOrDefault("cityName", "New City");
+            Long templateId = null;
+            if (request.containsKey("templateId") && request.get("templateId") != null) {
+                templateId = ((Number) request.get("templateId")).longValue();
+            }
+
+            CityMap newCity = cityMapService.createNewCity(username, cityName, templateId);
             return ResponseEntity.ok(Map.of(
                 "id", newCity.getId(),
                 "cityName", newCity.getCityName(),
@@ -266,6 +274,173 @@ public class CityMapApiController {
             return ResponseEntity.status(403)
                     .body(Map.of("error", e.getMessage()));
         } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * 맵 템플릿 저장 API (마스터 계정 전용)
+     */
+    @PostMapping("/template")
+    public ResponseEntity<?> saveMapTemplate(
+            @RequestBody Map<String, Object> request,
+            Principal principal) {
+
+        if (principal == null) {
+            return ResponseEntity.status(401)
+                    .body(Map.of("error", "로그인이 필요합니다"));
+        }
+
+        // 마스터 계정만 접근 가능
+        if (!MASTER_ACCOUNT.equals(principal.getName())) {
+            return ResponseEntity.status(403)
+                    .body(Map.of("error", "마스터 계정만 템플릿을 저장할 수 있습니다"));
+        }
+
+        try {
+            @SuppressWarnings("unchecked")
+            List<List<Integer>> gridData = (List<List<Integer>>) request.get("grid");
+            if (gridData == null) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "grid 데이터가 필요합니다"));
+            }
+
+            cityMapService.saveMapTemplate(gridData);
+            log.info("맵 템플릿이 저장되었습니다 by {}", principal.getName());
+
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "맵 템플릿이 저장되었습니다"
+            ));
+        } catch (Exception e) {
+            log.error("맵 템플릿 저장 실패: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "템플릿 저장 실패: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 맵 템플릿 조회 API (마스터 계정 전용)
+     */
+    @GetMapping("/template")
+    public ResponseEntity<?> getMapTemplate(Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(401)
+                    .body(Map.of("error", "로그인이 필요합니다"));
+        }
+
+        // 마스터 계정만 접근 가능
+        if (!MASTER_ACCOUNT.equals(principal.getName())) {
+            return ResponseEntity.status(403)
+                    .body(Map.of("error", "마스터 계정만 템플릿을 조회할 수 있습니다"));
+        }
+
+        try {
+            String templateJson = cityMapService.getMapTemplate();
+            return ResponseEntity.ok(Map.of(
+                "grid", templateJson,
+                "success", true
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /* =========================================================
+     * 맵 템플릿 관리 API (DB 저장)
+     * ========================================================= */
+
+    /**
+     * 모든 템플릿 목록 조회 (모든 사용자 접근 가능)
+     */
+    @GetMapping("/templates")
+    public ResponseEntity<?> getAllTemplates() {
+        try {
+            return ResponseEntity.ok(cityMapService.getAllTemplates());
+        } catch (Exception e) {
+            log.error("템플릿 목록 조회 실패: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * 새 템플릿 저장 (마스터 계정 전용)
+     */
+    @PostMapping("/templates")
+    public ResponseEntity<?> createTemplate(
+            @RequestBody Map<String, Object> request,
+            Principal principal) {
+
+        if (principal == null) {
+            return ResponseEntity.status(401)
+                    .body(Map.of("error", "로그인이 필요합니다"));
+        }
+
+        if (!MASTER_ACCOUNT.equals(principal.getName())) {
+            return ResponseEntity.status(403)
+                    .body(Map.of("error", "마스터 계정만 템플릿을 생성할 수 있습니다"));
+        }
+
+        try {
+            String name = (String) request.get("name");
+            String description = (String) request.get("description");
+            Object gridObj = request.get("grid");
+
+            if (name == null || name.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "템플릿 이름이 필요합니다"));
+            }
+
+            if (gridObj == null) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "grid 데이터가 필요합니다"));
+            }
+
+            // 새 형식 (tiles + env) 또는 기존 형식 (배열만) 처리
+            var template = cityMapService.saveNewTemplateRaw(name, description, gridObj);
+            log.info("새 템플릿 생성: {} by {}", name, principal.getName());
+
+            return ResponseEntity.ok(Map.of(
+                "id", template.getId(),
+                "name", template.getName(),
+                "message", "템플릿이 생성되었습니다"
+            ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("템플릿 생성 실패: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "템플릿 생성 실패: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 템플릿 삭제 (마스터 계정 전용)
+     */
+    @DeleteMapping("/templates/{templateId}")
+    public ResponseEntity<?> deleteTemplate(
+            @PathVariable Long templateId,
+            Principal principal) {
+
+        if (principal == null) {
+            return ResponseEntity.status(401)
+                    .body(Map.of("error", "로그인이 필요합니다"));
+        }
+
+        if (!MASTER_ACCOUNT.equals(principal.getName())) {
+            return ResponseEntity.status(403)
+                    .body(Map.of("error", "마스터 계정만 템플릿을 삭제할 수 있습니다"));
+        }
+
+        try {
+            cityMapService.deleteTemplate(templateId);
+            log.info("템플릿 삭제: {} by {}", templateId, principal.getName());
+            return ResponseEntity.ok(Map.of("message", "템플릿이 삭제되었습니다"));
+        } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", e.getMessage()));
         }

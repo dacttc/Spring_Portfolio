@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta th:if="${_csrf}" name="_csrf" th:content="${_csrf.token}"/>
+    <meta th:if="${_csrf}" name="_csrf_header" th:content="${_csrf.headerName}"/>
     <title>City Builder</title>
     <script src="/js/i18n.js"></script>
     <style>
@@ -456,6 +458,7 @@
 
         .create-city-form {
             display: flex;
+            flex-direction: column;
             gap: 10px;
         }
 
@@ -503,6 +506,44 @@
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
+        }
+
+        /* Template select */
+        .template-select-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        .template-select-wrapper label {
+            font-size: 0.85rem;
+            color: #64748b;
+            font-weight: 500;
+        }
+
+        .template-select-wrapper select {
+            width: 100%;
+            padding: 10px 14px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            color: #0f172a;
+            font-size: 0.95rem;
+            outline: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .template-select-wrapper select:focus {
+            border-color: #3b82f6;
+            background: #fff;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .template-select-wrapper select option {
+            padding: 8px;
         }
 
         /* City count */
@@ -570,6 +611,10 @@
                 </a>
                 <a href="/mypage" class="nav-link" data-i18n="common.mypage">My Page</a>
                 <a sec:authorize="hasRole('ADMIN')" href="/admin" class="nav-link">Admin</a>
+                <!-- 마스터 계정 전용 지도 편집기 -->
+                <a th:if="${#authentication.name == 'dacttc'}" href="/map-editor" class="nav-link" style="background: linear-gradient(135deg, #f97316, #ea580c); color: #fff; border: none;">
+                    🗺️ Map Editor
+                </a>
             </nav>
 
             <div class="main-content">
@@ -593,7 +638,7 @@
                             <span>🏙️</span> My Cities
                         </button>
                         <form th:action="@{/logout}" method="post" style="margin: 0;">
-                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                            <input type="hidden" name="_csrf" th:if="${_csrf}" th:value="${_csrf.token}" />
                             <button type="submit" class="btn btn-danger" style="width: 100%;" data-i18n="common.logout">Logout</button>
                         </form>
                     </div>
@@ -652,6 +697,12 @@
                 <h3>➕ <span data-i18n="home.createNewCity">Create New City</span></h3>
                 <form class="create-city-form" onsubmit="createCity(event)">
                     <input type="text" id="newCityName" placeholder="New city name" data-i18n-placeholder="home.newCityName" maxlength="30" required>
+                    <div class="template-select-wrapper">
+                        <label for="templateSelect">🗺️ <span data-i18n="home.selectTemplate">Map Template</span></label>
+                        <select id="templateSelect">
+                            <option value="">Default (Empty)</option>
+                        </select>
+                    </div>
                     <button type="submit" id="createCityBtn" data-i18n="home.create">Create</button>
                 </form>
             </div>
@@ -659,15 +710,41 @@
     </div>
 
     <script th:inline="javascript">
-        const currentUsername = [[${#authentication?.name}]];
-        const csrfToken = [[${_csrf.token}]];
-        const csrfHeader = [[${_csrf.headerName}]];
+        const currentUsername = /*[[${currentUsername}]]*/ null;
+        const csrfToken = document.querySelector('meta[name="_csrf"]')?.content || '';
+        const csrfHeader = document.querySelector('meta[name="_csrf_header"]')?.content || 'X-CSRF-TOKEN';
 
         let citiesData = [];
+        let templatesData = [];
+
+        // 템플릿 목록 로드
+        async function loadTemplates() {
+            const select = document.getElementById('templateSelect');
+            try {
+                const response = await fetch('/api/map/templates');
+                if (response.ok) {
+                    templatesData = await response.json();
+                    // 기본 옵션 유지하고 템플릿 추가
+                    select.innerHTML = '<option value="">Default (Empty)</option>';
+                    templatesData.forEach(template => {
+                        const option = document.createElement('option');
+                        option.value = template.id;
+                        option.textContent = template.name + (template.description ? ` - ${template.description}` : '');
+                        if (template.isDefault) {
+                            option.textContent += ' ⭐';
+                        }
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading templates:', error);
+            }
+        }
 
         function openCitiesModal() {
             document.getElementById('citiesModal').classList.add('active');
             loadCities();
+            loadTemplates();
         }
 
         function closeCitiesModal() {
@@ -721,20 +798,19 @@
 
             container.innerHTML = citiesData.map((city, index) => {
                 const cityName = (city.cityName && city.cityName.trim()) || 'My City';
+                const templateInfo = city.templateName ? `🗺️ ${escapeHtml(city.templateName)}` : '';
                 return `
                 <div class="city-item">
                     <div class="city-info">
                         <div class="city-icon">🏙️</div>
                         <div class="city-details">
                             <h3>${escapeHtml(cityName)}</h3>
-                            <span>💰 ${formatMoney(city.money)} · 👥 ${city.population || 0}</span>
+                            <span>💰 ${formatMoney(city.money)} · 👥 ${city.population || 0}${templateInfo ? ' · ' + templateInfo : ''}</span>
                         </div>
                     </div>
                     <div class="city-actions">
                         <a href="/${currentUsername}/${encodeURIComponent(cityName)}" class="city-btn city-btn-enter" data-i18n="home.enter">Enter</a>
-                        ${citiesData.length > 1 ? `
-                            <button class="city-btn city-btn-delete" onclick="deleteCity('${escapeHtml(cityName)}')" data-i18n="home.delete">Delete</button>
-                        ` : ''}
+                        <button class="city-btn city-btn-delete" onclick="deleteCity('${escapeHtml(cityName)}')" data-i18n="home.delete">Delete</button>
                     </div>
                 </div>
             `}).join('');
@@ -745,6 +821,8 @@
 
             const nameInput = document.getElementById('newCityName');
             const cityName = nameInput.value.trim();
+            const templateSelect = document.getElementById('templateSelect');
+            const templateId = templateSelect.value ? parseInt(templateSelect.value) : null;
             const btn = document.getElementById('createCityBtn');
 
             if (!cityName) return;
@@ -753,13 +831,18 @@
             btn.textContent = 'Creating...';
 
             try {
+                const requestBody = { cityName };
+                if (templateId) {
+                    requestBody.templateId = templateId;
+                }
+
                 const response = await fetch(`/api/map/${currentUsername}/cities`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         [csrfHeader]: csrfToken
                     },
-                    body: JSON.stringify({ cityName })
+                    body: JSON.stringify(requestBody)
                 });
 
                 const result = await response.json();
@@ -768,12 +851,8 @@
                     throw new Error(result.error || 'Failed to create city');
                 }
 
-                nameInput.value = '';
-                loadCities();
-
-                if (confirm(`"${result.cityName}" has been created. Go to city?`)) {
-                    window.location.href = `/${currentUsername}/${encodeURIComponent(result.cityName)}`;
-                }
+                // 생성된 도시로 바로 이동
+                window.location.href = `/${currentUsername}/${encodeURIComponent(result.cityName)}`;
             } catch (error) {
                 console.error('Error creating city:', error);
                 alert(error.message || 'Failed to create city.');
@@ -849,7 +928,7 @@
         }
 
         async function loadLastPlayedCity() {
-            if (!currentUsername) return;
+            if (!currentUsername || currentUsername === 'anonymousUser') return;
 
             try {
                 const response = await fetch(`/api/map/${currentUsername}/last-played`);

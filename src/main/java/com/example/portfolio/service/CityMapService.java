@@ -2,11 +2,14 @@ package com.example.portfolio.service;
 
 import com.example.portfolio.domain.CellType;
 import com.example.portfolio.domain.CityMap;
+import com.example.portfolio.domain.MapTemplate;
 import com.example.portfolio.domain.User;
 import com.example.portfolio.dto.CityMapResponse;
 import com.example.portfolio.dto.CityMapUpdateRequest;
 import com.example.portfolio.dto.CityStatsResponse;
+import com.example.portfolio.dto.MapTemplateResponse;
 import com.example.portfolio.repository.CityMapRepository;
+import com.example.portfolio.repository.MapTemplateRepository;
 import com.example.portfolio.repository.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,11 +31,12 @@ public class CityMapService {
 
     private final CityMapRepository cityMapRepository;
     private final UserRepository userRepository;
+    private final MapTemplateRepository mapTemplateRepository;
     private final CityStatsService cityStatsService;
     private final GameSecurityService gameSecurityService;
     private final ObjectMapper objectMapper;
 
-    private static final int GRID_SIZE = 48;
+    private static final int GRID_SIZE = 70;
     private static final int MAX_CITIES_PER_USER = 5;  // 유저당 최대 도시 수
 
     @Transactional(readOnly = true)
@@ -438,9 +442,9 @@ public class CityMapService {
                 }
             }
         }
-        // 오른쪽 외곽 경계가 잠긴 상태인지 확인
-        for (int i = 0; i < GRID_SIZE; i++) {
-            if (grid[GRID_SIZE - 1][i] != 2) {
+        // 하단 외곽 경계가 잠긴 상태인지 확인 (y = 94, 95, LOCKED_ROAD_4LANE = 14)
+        for (int x = 0; x < GRID_SIZE; x++) {
+            if (grid[x][GRID_SIZE - 2] != 14 || grid[x][GRID_SIZE - 1] != 14) {
                 throw new IllegalArgumentException("외곽 경계는 변경할 수 없습니다");
             }
         }
@@ -459,14 +463,15 @@ public class CityMapService {
     }
 
     /**
-     * 사용자의 모든 도시 목록 조회
+     * 사용자의 모든 도시 목록 조회 (최근 플레이 순으로 정렬)
      */
     @Transactional(readOnly = true)
     public List<CityMapResponse> getCitiesByUsername(String username) {
-        User user = userRepository.findByUsername(username)
+        userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + username));
 
-        List<CityMap> cities = cityMapRepository.findByUser(user);
+        // 최근 업데이트(플레이) 순으로 정렬하여 조회
+        List<CityMap> cities = cityMapRepository.findByUserUsernameOrderByUpdatedAtDesc(username);
 
         return cities.stream()
                 .map(city -> new CityMapResponse(city, true))
@@ -474,10 +479,18 @@ public class CityMapService {
     }
 
     /**
-     * 새 도시 생성
+     * 새 도시 생성 (기본 템플릿 사용)
      */
     @Transactional
     public CityMap createNewCity(String username, String cityName) {
+        return createNewCity(username, cityName, null);
+    }
+
+    /**
+     * 새 도시 생성 (템플릿 선택)
+     */
+    @Transactional
+    public CityMap createNewCity(String username, String cityName, Long templateId) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다"));
 
@@ -498,7 +511,24 @@ public class CityMapService {
             slug = "city-" + (cityCount + 1);
         }
 
-        CityMap cityMap = CityMap.createDefault(user, cityName, slug);
+        // 템플릿에서 그리드 데이터 가져오기
+        String gridData = null;
+        String templateName = null;
+        if (templateId != null) {
+            MapTemplate template = mapTemplateRepository.findById(templateId)
+                    .orElseThrow(() -> new IllegalArgumentException("템플릿을 찾을 수 없습니다: " + templateId));
+            gridData = template.getGridData();
+            templateName = template.getName();
+        }
+
+        CityMap cityMap;
+        if (gridData != null) {
+            // 템플릿 사용하여 생성
+            cityMap = CityMap.createWithGrid(user, cityName, slug, gridData, templateName);
+        } else {
+            // 기본 템플릿 사용
+            cityMap = CityMap.createDefault(user, cityName, slug);
+        }
         return cityMapRepository.save(cityMap);
     }
 
@@ -520,12 +550,6 @@ public class CityMapService {
         }
         if (cityMap == null) {
             throw new IllegalArgumentException("도시를 찾을 수 없습니다: " + cityName);
-        }
-
-        // 최소 1개의 도시는 유지
-        int cityCount = cityMapRepository.countByUser(user);
-        if (cityCount <= 1) {
-            throw new IllegalStateException("최소 1개의 도시는 유지해야 합니다");
         }
 
         cityMapRepository.delete(cityMap);
@@ -579,5 +603,175 @@ public class CityMapService {
             return "city";
         }
         return slug.length() > 30 ? slug.substring(0, 30) : slug;
+    }
+
+    // ============================================================
+    // 맵 템플릿 관리 (마스터 계정 전용)
+    // ============================================================
+
+    // 메모리에 저장되는 기본 맵 템플릿 (애플리케이션 재시작 시 초기화됨)
+    private static String defaultMapTemplate = null;
+
+    /**
+     * 맵 템플릿 저장
+     */
+    public void saveMapTemplate(List<List<Integer>> gridData) {
+        try {
+            defaultMapTemplate = objectMapper.writeValueAsString(gridData);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("템플릿 JSON 변환 실패", e);
+        }
+    }
+
+    /**
+     * 맵 템플릿 조회
+     */
+    public String getMapTemplate() {
+        if (defaultMapTemplate == null) {
+            // 기본 템플릿 생성 (50x50, 하단 도로)
+            int[][] grid = new int[GRID_SIZE][GRID_SIZE];
+            for (int x = 0; x < GRID_SIZE; x++) {
+                grid[x][48] = 14; // LOCKED_ROAD_4LANE
+                grid[x][49] = 14;
+            }
+            try {
+                return objectMapper.writeValueAsString(grid);
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException("기본 템플릿 생성 실패", e);
+            }
+        }
+        return defaultMapTemplate;
+    }
+
+    /**
+     * 저장된 템플릿으로 새 도시 생성 시 사용
+     */
+    public String getDefaultGridData() {
+        if (defaultMapTemplate != null) {
+            return defaultMapTemplate;
+        }
+        // 기본 템플릿 (하단 도로만)
+        return CityMap.createDefault(null).getGridData();
+    }
+
+    /* =========================================================
+     * 맵 템플릿 관리 (DB 저장)
+     * ========================================================= */
+
+    /**
+     * 모든 활성 템플릿 목록 조회
+     */
+    @Transactional(readOnly = true)
+    public List<MapTemplateResponse> getAllTemplates() {
+        return mapTemplateRepository.findByIsActiveTrueOrderByIsDefaultDescCreatedAtAsc()
+                .stream()
+                .map(MapTemplateResponse::new)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 특정 템플릿 조회
+     */
+    @Transactional(readOnly = true)
+    public MapTemplate getTemplateById(Long templateId) {
+        return mapTemplateRepository.findById(templateId)
+                .orElseThrow(() -> new IllegalArgumentException("템플릿을 찾을 수 없습니다: " + templateId));
+    }
+
+    /**
+     * 새 템플릿 저장 (마스터 전용) - 기존 형식 (List)
+     */
+    @Transactional
+    public MapTemplate saveNewTemplate(String name, String description, List<List<Integer>> gridData) {
+        // 이름 중복 체크
+        if (mapTemplateRepository.existsByName(name)) {
+            throw new IllegalArgumentException("이미 같은 이름의 템플릿이 있습니다: " + name);
+        }
+
+        String gridJson;
+        try {
+            gridJson = objectMapper.writeValueAsString(gridData);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("템플릿 JSON 변환 실패", e);
+        }
+
+        MapTemplate template = MapTemplate.builder()
+                .name(name)
+                .description(description)
+                .gridData(gridJson)
+                .isDefault(false)
+                .build();
+
+        return mapTemplateRepository.save(template);
+    }
+
+    /**
+     * 새 템플릿 저장 (마스터 전용) - Raw Object 처리 (새 형식/기존 형식 모두 지원)
+     */
+    @Transactional
+    public MapTemplate saveNewTemplateRaw(String name, String description, Object gridData) {
+        // 이름 중복 체크
+        if (mapTemplateRepository.existsByName(name)) {
+            throw new IllegalArgumentException("이미 같은 이름의 템플릿이 있습니다: " + name);
+        }
+
+        String gridJson;
+        try {
+            // Object를 그대로 JSON으로 변환 (새 형식/기존 형식 모두 처리)
+            gridJson = objectMapper.writeValueAsString(gridData);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("템플릿 JSON 변환 실패", e);
+        }
+
+        MapTemplate template = MapTemplate.builder()
+                .name(name)
+                .description(description)
+                .gridData(gridJson)
+                .isDefault(false)
+                .build();
+
+        return mapTemplateRepository.save(template);
+    }
+
+    /**
+     * 템플릿 삭제 (마스터 전용)
+     */
+    @Transactional
+    public void deleteTemplate(Long templateId) {
+        MapTemplate template = mapTemplateRepository.findById(templateId)
+                .orElseThrow(() -> new IllegalArgumentException("템플릿을 찾을 수 없습니다: " + templateId));
+
+        if (template.getIsDefault()) {
+            throw new IllegalStateException("기본 템플릿은 삭제할 수 없습니다");
+        }
+
+        mapTemplateRepository.delete(template);
+    }
+
+    /**
+     * 템플릿 수정 (마스터 전용)
+     */
+    @Transactional
+    public MapTemplate updateTemplate(Long templateId, String name, String description, List<List<Integer>> gridData) {
+        MapTemplate template = mapTemplateRepository.findById(templateId)
+                .orElseThrow(() -> new IllegalArgumentException("템플릿을 찾을 수 없습니다: " + templateId));
+
+        // 이름이 변경된 경우 중복 체크
+        if (!template.getName().equals(name) && mapTemplateRepository.existsByName(name)) {
+            throw new IllegalArgumentException("이미 같은 이름의 템플릿이 있습니다: " + name);
+        }
+
+        template.setName(name);
+        template.setDescription(description);
+
+        if (gridData != null) {
+            try {
+                template.setGridData(objectMapper.writeValueAsString(gridData));
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException("템플릿 JSON 변환 실패", e);
+            }
+        }
+
+        return template;
     }
 }

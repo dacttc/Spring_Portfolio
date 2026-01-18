@@ -9,9 +9,7 @@
 <p>인증 메일을 받지 못했나요? 아래 버튼을 누르면 인증 메일을 다시 보냅니다.</p>
 
 <form th:action="@{/resend-verification}" method="post">
-    <input type="hidden"
-           th:name="${_csrf.parameterName}"
-           th:value="${_csrf.token}" />
+    <input type="hidden" name="_csrf" th:if="${_csrf}" th:value="${_csrf.token}" />
 
     <button type="submit">인증 메일 재발송</button>
 </form>

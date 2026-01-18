@@ -187,6 +187,43 @@ src/main/resources/
 - Controller: @Controller (템플릿) / @RestController (API)
 - DTO: Jakarta Validation 사용 (@NotNull, @Min, @Email 등)
 
+### Thymeleaf 템플릿 주의사항
+
+**⚠️ JavaScript에서 `[[` 패턴 사용 금지 (주석 포함)**
+
+Thymeleaf는 `[[...]]`를 인라인 표현식으로 해석하므로, JavaScript 코드 및 **주석**에서도 이 패턴 사용 시 오류 발생:
+
+```javascript
+// ❌ Bad: Thymeleaf가 [[-1을 표현식으로 해석하여 오류 발생
+const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+// ✅ Good: push()로 분리하여 [[ 패턴 회피
+const directions = [];
+directions.push([-1, 0], [1, 0], [0, -1], [0, 1]);
+
+// ✅ Good: Array.of() 사용
+const directions = Array.of([-1, 0], [1, 0], [0, -1], [0, 1]);
+```
+
+**오류 메시지 예시:**
+```
+TemplateProcessingException: Could not parse as expression: "-1, 0], [1, 0]..."
+```
+
+**⚠️ CSRF 토큰 접근 시 `?.` 연산자 사용 금지**
+
+Thymeleaf에서 `?.` (safe navigation) 연산자는 SpEL 오류 발생:
+
+```html
+<!-- ❌ Bad: SpEL 평가 오류 발생 -->
+<input type="hidden" name="_csrf" th:value="${_csrf?.token}" />
+
+<!-- ✅ Good: th:if로 null 체크 후 접근 -->
+<input type="hidden" name="_csrf" th:if="${_csrf}" th:value="${_csrf.token}" />
+```
+
+**참고:** `/api/**` 엔드포인트는 SecurityConfig에서 CSRF가 비활성화되어 있으므로 API 호출 시 CSRF 토큰 불필요.
+
 ### 성능 최적화 (CPU/RAM/GPU)
 모든 구현은 성능 최적화를 고려해야 함:
 
@@ -423,30 +460,81 @@ WARN
 | 순위 | 상태 | 아이콘 | 설명 |
 |------|------|--------|------|
 | 1 | 폐건물 | 🏚️ | 건물이 폐건물 상태 |
-| 2 | 도로 끊김 | 🚫 | 외곽 도로와 연결 안 됨 |
+| 2 | 도로 끊김 (서비스) | 🚫 | 서비스 건물이 도로와 연결 안 됨 |
+| 2.5 | 도로 끊김 (민간) | 🚫 | 외곽 도로와 연결 안 됨 |
+| 2.8 | 전력 부족 (서비스) | ⚡ | 서비스 건물에 전력 없음 |
 | 3 | 전력 부족 | ⚡ | 전력 공급 불가 |
 | 4 | 물 부족 | 💧 | 수도 공급 불가 |
+| 5 | 소방서 필요 | 🚒 | 소방서 효과 범위 밖 |
+| 6 | 경찰서 필요 | 🚔 | 경찰서 효과 범위 밖 |
+| 7 | 병원 필요 | 🏥 | 병원 효과 범위 밖 |
+| 8 | 학교 필요 | 🏫 | 학교 효과 범위 밖 |
+| 9 | 공원 필요 | 🌳 | 공원 효과 범위 밖 |
+| 10 | 행복도 낮음 | 😢 | 행복도 30% 미만 |
 
 #### 적용 규칙
 
 1. **아이콘 표시**: 건물당 하나의 아이콘만 표시 (가장 높은 우선순위)
 2. **팝업 메시지**: 건물 클릭 시 상태 메시지도 동일한 우선순위 적용
-3. **시민 한마디**: 이벤트/상태 관련 문구도 우선순위 순서로 표시
+3. **시민 한마디**: 요구사항 메시지가 우선 표시됨
+
+#### 서비스 요구사항 시스템
+
+시민들이 필요로 하는 서비스가 부족할 때 건물에 요구사항 아이콘이 표시됨:
+
+| 서비스 | 효과 범위 | 아이콘 | 시민 메시지 |
+|--------|----------|--------|------------|
+| 소방서 | 8칸 | 🚒 | "화재가 걱정돼요... 소방서가 필요해요!" |
+| 경찰서 | 8칸 | 🚔 | "치안이 불안해요... 경찰서가 필요해요!" |
+| 병원 | 12칸 | 🏥 | "아플 때 갈 곳이 없어요... 병원이 필요해요!" |
+| 학교 | 10칸 | 🏫 | "아이들 교육이 걱정돼요... 학교가 필요해요!" |
+| 공원 | 5칸 | 🌳 | "쉴 곳이 없어요... 공원이 필요해요!" |
+
+#### 요구사항 체크 주기
+
+- **업데이트 주기**: 30초마다 모든 건물의 서비스 요구사항 체크
+- **적용 대상**: 민간 건물 (주거/상업, 폐건물 제외)
+- **제외 대상**: 서비스 건물, 참조 건물 (2x2의 나머지 3칸)
 
 #### 구현
 
 ```javascript
 const BUILDING_STATUS = {
-    ABANDONED: { priority: 1, icon: '🏚️' },
-    NO_ROAD: { priority: 2, icon: '🚫' },
-    NO_POWER: { priority: 3, icon: '⚡' },
-    NO_WATER: { priority: 4, icon: '💧' }
+    // 치명적 문제 (우선순위 1-4)
+    ABANDONED: { priority: 1, icon: '🏚️', message: '폐건물이 되었어요...' },
+    SERVICE_NO_ROAD: { priority: 2, icon: '🚫', message: '도로가 끊겨서 운영할 수 없어요!' },
+    NO_ROAD: { priority: 2.5, icon: '🚫', message: '도로가 없어서 갈 수가 없어요!' },
+    SERVICE_NO_POWER: { priority: 2.8, icon: '⚡', message: '전기가 없어서 운영이 중단됐어요!' },
+    NO_POWER: { priority: 3, icon: '⚡', message: '전기가 없어요! 발전소가 필요해요!' },
+    NO_WATER: { priority: 4, icon: '💧', message: '수도가 안 나와요! 취수장이 필요해요!' },
+    // 서비스 요구사항 (우선순위 5-10)
+    NEED_FIRE: { priority: 5, icon: '🚒', message: '화재가 걱정돼요... 소방서가 필요해요!' },
+    NEED_POLICE: { priority: 6, icon: '🚔', message: '치안이 불안해요... 경찰서가 필요해요!' },
+    NEED_HOSPITAL: { priority: 7, icon: '🏥', message: '아플 때 갈 곳이 없어요... 병원이 필요해요!' },
+    NEED_SCHOOL: { priority: 8, icon: '🏫', message: '아이들 교육이 걱정돼요... 학교가 필요해요!' },
+    NEED_PARK: { priority: 9, icon: '🌳', message: '쉴 곳이 없어요... 공원이 필요해요!' },
+    LOW_HAPPINESS: { priority: 10, icon: '😢', message: '여기 살기 힘들어요...' }
 };
 
 // 상태 추가/제거
 addBuildingStatus(x, y, 'NO_POWER', building);
 removeBuildingStatus(x, y, 'NO_POWER');
+
+// 서비스 요구사항 체크 (30초마다 실행)
+function checkBuildingServiceNeeds(x, y, building) {
+    // 효과 범위 내 서비스 건물 존재 여부 확인
+    // 부족한 서비스는 NEED_* 상태로 추가
+}
 ```
+
+#### 시민 한마디 우선순위
+
+건물 클릭 시 시민 한마디에 표시되는 메시지 우선순위:
+
+1. **요구사항 메시지** (priority <= 4: negative 스타일, 5-10: mid 스타일)
+2. **화재 이벤트** (건물이 불타고 있을 때)
+3. **공간 부족** (행복도 높은데 자금/공간 부족)
+4. **일반 행복도 메시지**
 
 ---
 
@@ -493,6 +581,69 @@ const eased = 1 - Math.pow(1 - progress, 3);  // easeOutCubic
 - **정적 데이터**: 한 번 배정된 인구는 변하지 않음
 - **랜덤 차이**: 같은 크기 건물이어도 인구가 다름 (범위 내 랜덤)
 - **저장**: 현재 클라이언트 메모리에만 저장 (DB 연동 예정)
+
+### 연령별 인구 시스템
+
+인구는 4개 연령 그룹으로 나뉘며, 게임 시간 경과에 따라 자연스럽게 변화함.
+
+#### 연령 그룹
+
+| 그룹 | 연령대 | 아이콘 | 노동력 | 세금 기여 |
+|------|--------|--------|--------|----------|
+| 어린이 | 0-14세 | 👶 | 0% | 0% |
+| 청년 | 15-29세 | 🧑 | 80% | 70% |
+| 중년 | 30-59세 | 👨 | 100% | 100% |
+| 노인 | 60세+ | 👴 | 20% | 50% |
+
+#### 연령 전환 (게임일 기준)
+
+```
+어린이 ─(15일)→ 청년 ─(15일)→ 중년 ─(30일)→ 노인 ─(20일 평균수명)→ 사망
+```
+
+#### 출생/사망 시스템
+
+| 요소 | 기본값 | 보너스/감소 |
+|------|--------|------------|
+| 출생률 | 15‰/일 | 학교 +20%, 공원 +10%, 행복도 70+ +20% |
+| 사망률 | 8‰/일 | 병원 -30% |
+
+- **출산 가능 인구**: 청년 50% + 중년 30%
+- **노인 자연사**: 평균 수명 20일 기준 확률적 사망
+
+#### 서비스 수요 (연령 기반)
+
+각 서비스 시설은 연령별로 다른 수요를 가짐:
+
+| 서비스 | 어린이 | 청년 | 중년 | 노인 |
+|--------|--------|------|------|------|
+| 🏫 교육 | 100% | 30% | 0% | 0% |
+| 🏥 의료 | 30% | 20% | 30% | 100% |
+| 🌳 공원 | 80% | 50% | 40% | 70% |
+
+```javascript
+// 서비스 수요 계산
+서비스 수요 = Σ(연령별 인구 × 연령별 수요율)
+
+// 서비스 커버리지 계산
+커버리지(%) = (서비스 건물 수 × 건물당 용량) / 서비스 수요 × 100
+```
+
+#### 서비스 용량
+
+| 서비스 | 건물당 용량 |
+|--------|------------|
+| 학교 | 200명 |
+| 병원 | 150명 |
+| 공원 | 100명 |
+
+#### UI 표시 (인구 패널)
+
+인구 표시(👥) 클릭 시 표시되는 패널:
+- 연령별 인구 막대 그래프 (분홍/파랑/초록/보라)
+- 출생률/사망률 (‰ 단위)
+- 노동인구 (청년×0.8 + 중년×1.0 + 노인×0.2)
+- 서비스 충족률 (80%↑=초록, 50%↑=노랑, 50%↓=빨강)
 
 ---
 
@@ -1126,3 +1277,253 @@ if (isBurning) {
 
 - 자금 변동 시 예산 패널이 열려있으면 총 자산 자동 갱신
 - 채권 발행/상환 시 즉시 반영
+
+---
+
+## 시민 SNS 피드 시스템
+
+### 개요
+
+화면 우측에 위치한 시티즈 스카이라인 스타일의 시민 SNS 피드. 게임 내 이벤트에 따라 시민들이 유쾌하고 비꼬는 댓글을 남김.
+
+### 위치 및 UI
+
+| 항목 | 설명 |
+|------|------|
+| 위치 | 화면 우측 상단 (top: 50px, right: 12px) |
+| 크기 | 280px 너비, 최대 400px 높이 |
+| 스타일 | 다크 테마, 반투명 배경, 블러 효과 |
+
+### 이벤트 기반 시스템
+
+**중요**: SNS 피드는 랜덤/일반 포스트 없이 **오직 게임 내 실제 이벤트에만** 반응하여 포스트를 생성함.
+
+### 이벤트별 댓글
+
+#### 부정적 이벤트 (빨간색 테두리)
+| 이벤트 | 이벤트ID | 댓글 예시 |
+|--------|----------|----------|
+| 전기 없음 | noPower | "전기가 없어서 살 수가 없어요 완전 원시시대 같네요 🕯️" |
+| 물 없음 | noWater | "화장실 물이 안 내려가요... 더 이상의 자세한 설명은 생략 🚽" |
+| 화재 발생 | fireStart | "불이야!!! 🔥🔥🔥 빨리 와주세요!!!" |
+| 건물 전소 | fireBurnout | "집이 다 탔어요... 소방차는 어디 있었던 거예요 😭" |
+| 치안 실패 | crimeFailed | "이 도시는 치안이란게 없나요? 범죄자가 활개치고 다녀요 😠" |
+| 환경 오염 | pollutionHigh | "공기가 안 좋아요... 마스크 필수 😷" |
+
+#### 경고 이벤트 (노란색 테두리)
+| 이벤트 | 이벤트ID | 댓글 예시 |
+|--------|----------|----------|
+| 소방서 부족 | noFireStation | "소방서가 너무 멀어요... 화재나면 어쩌죠? 🔥" |
+| 경찰서 부족 | noPolice | "밤에 무서워서 못 다니겠어요... 경찰서 좀 지어주세요 👮" |
+| 병원 부족 | noHospital | "응급실 가려면 30분 운전해야 해요 😰" |
+| 교통 체증 | trafficJam | "출퇴근 시간 도로가 꽉 막혀요... 🚗🚗🚗" |
+
+#### 긍정적 이벤트 (초록색 테두리)
+| 이벤트 | 이벤트ID | 댓글 예시 |
+|--------|----------|----------|
+| 전기 복구 | powerRestored | "드디어 에어컨! 시장님 사랑해요 ❤️" |
+| 화재 진압 | fireExtinguished | "소방관 아저씨들 최고예요!!! 🚒💕" |
+| 범죄 체포 | crimeHandled | "경찰이 강도를 잡았대요! 아주 든든해요 💪👮" |
+| 소방서 건설 | fireStationBuilt | "소방서 생겼다! 이제 안심이에요 🚒" |
+| 경찰서 건설 | policeHelp | "경찰서 생기고 마음이 편해졌어요 😊" |
+| 학교 건설 | schoolBuilt | "학교 생겼다! 우리 애 걸어서 통학 가능! 🏫" |
+| 공원 건설 | parkBuilt | "공원 생겼다! 오늘부터 매일 조깅이다 🏃‍♂️" |
+| 인구 증가 | populationGrowth | "새 이웃이 이사왔어요! 환영합니다~ 🏠" |
+
+### 기능
+
+| 기능 | 설명 |
+|------|------|
+| 접기/펼치기 | 헤더 클릭으로 패널 접기/펼치기 |
+| 읽지 않은 개수 | 접혀있을 때 새 포스트 개수 배지 표시 |
+| 이벤트 기반 | 게임 이벤트 발생 시에만 포스트 생성 (랜덤 포스트 없음) |
+| 최대 포스트 | 최대 15개 유지 (FIFO) |
+
+### 구현
+
+```javascript
+// SNS 이벤트 트리거 (게임 내 이벤트 발생 시 호출)
+CitizenSNS.onEvent('fireStart', '(x, y) 근처');      // 화재 발생
+CitizenSNS.onEvent('fireExtinguished', '위치');       // 화재 진압
+CitizenSNS.onEvent('crimeHandled', '위치');           // 범죄 체포 성공
+CitizenSNS.onEvent('crimeFailed', '위치');            // 범죄 체포 실패
+CitizenSNS.onEvent('fireStationBuilt', '위치');       // 소방서 건설
+CitizenSNS.onEvent('noPower', '위치');                // 전기 없음
+CitizenSNS.onEvent('powerRestored', '위치');          // 전기 복구
+```
+
+### 연결된 게임 이벤트
+
+| 게임 시스템 | 트리거 위치 | SNS 이벤트 |
+|------------|------------|-----------|
+| 화재 시스템 | `startFire()` | fireStart |
+| 화재 시스템 | `extinguishFire()` | fireExtinguished |
+| 화재 시스템 | 건물 전소 시 | fireBurnout |
+| 범죄 시스템 | `resolveCrime(byPolice=true)` | crimeHandled |
+| 범죄 시스템 | `applyCrimeDamage()` | crimeFailed |
+| 건설 시스템 | 공공시설 배치 시 | fireStationBuilt, policeHelp 등 |
+
+### 포스트 구조
+
+```javascript
+{
+    id: Date.now(),           // 고유 ID
+    name: '김민준',           // 랜덤 생성된 시민 이름
+    avatar: '👨',             // 랜덤 아바타 이모지
+    message: '댓글 내용...',  // 이벤트별 랜덤 메시지
+    type: 'positive',         // positive, negative, warning, info
+    location: '중앙구 아파트', // 랜덤 위치
+    time: new Date(),         // 작성 시간
+    likes: 23,                // 랜덤 좋아요 수
+    comments: 5               // 랜덤 댓글 수
+}
+```
+
+---
+
+## 건물 상태 아이콘 위치 계산
+
+건물 위에 표시되는 상태 아이콘(⚡, 💧, 🚫 등)의 위치는 3D 바운딩 박스를 사용하여 계산됨.
+
+### 구현 방식
+
+```javascript
+// 바운딩 박스로 건물 상단 위치 계산
+_iconBox.setFromObject(building.instance);  // 3D 모델 전체 범위
+_iconBox.getCenter(_iconCenter);             // 중앙 좌표
+
+// 건물 상단 중앙에 아이콘 위치
+_iconTop.set(_iconCenter.x, _iconBox.max.y + 0.5, _iconCenter.z);
+
+// 3D → 2D 화면 좌표 변환 (GPU 가속)
+_iconTop.project(camera);
+const x = (_iconTop.x * 0.5 + 0.5) * clientW;
+const y = (-_iconTop.y * 0.5 + 0.5) * clientH;
+
+// CSS transform으로 GPU 가속 적용
+element.style.transform = `translate3d(${x - hw}px, ${y - hh}px, 0)`;
+```
+
+### 최적화
+
+| 항목 | 설명 |
+|------|------|
+| 재사용 객체 | `_iconBox`, `_iconCenter`, `_iconTop` 등 Vector3/Box3 재사용 |
+| GPU 가속 | `translate3d()` 사용으로 리플로우 방지 |
+| 조건부 업데이트 | 카메라 이동 시에만 위치 업데이트 |
+
+---
+
+## 뷰 모드 머티리얼 관리
+
+### 수도/하수 뷰 전환 시 머티리얼 캐시 문제
+
+수도(Water)와 하수(Sewage) 뷰 모드는 `oceanSewageSystem`을 공유하여 바다 오염 시각화를 표시함. 뷰 모드 간 직접 전환 시 머티리얼 캐시가 꼬일 수 있음.
+
+### 문제 원인
+
+1. 수도 뷰 진입: `waterManager`가 회색 머티리얼 적용
+2. `oceanSewageSystem.toggleView(true)`: 이미 회색인 머티리얼을 "원본"으로 저장
+3. 하수 뷰로 전환: `waterManager` 복원, 하지만 `oceanSewageSystem`은 회색을 원본으로 기억
+4. 카메라 모드 복귀: `oceanSewageSystem`이 회색 머티리얼로 "복원" → 버그!
+
+### 해결 방법
+
+#### 1. 뷰 진입 순서 변경
+
+`oceanSewageSystem.toggleView(true)`를 `setMode()` 호출 전에 실행하여 원본 머티리얼을 먼저 저장:
+
+```javascript
+// 바다 하수 시각화 (setMode 전에 원본 머티리얼 저장)
+if (typeof oceanSewageSystem !== 'undefined') {
+    oceanSewageSystem.toggleView(true);  // 원본 저장
+}
+setMode(MODE.WATER_VIEW);  // 이후 회색 적용
+```
+
+#### 2. 뷰 간 전환 시 캐시 갱신
+
+수도 ↔ 하수 직접 전환 시 `oceanSewageSystem` 머티리얼 캐시를 강제 갱신:
+
+```javascript
+// 수도 → 하수 전환 시 머티리얼 캐시 갱신
+if (sewageRelatedModes.includes(mode)) {
+    if (oceanSewageSystem.isViewActive) {
+        oceanSewageSystem.originalMaterials.clear();
+        oceanSewageSystem.applyDataViewMaterials(true);
+    }
+}
+```
+
+### 관련 컴포넌트
+
+| 컴포넌트 | 머티리얼 저장소 | 역할 |
+|----------|---------------|------|
+| `waterManager` | `waterViewOriginalMaterials` | 수도 뷰 회색 머티리얼 |
+| `oceanSewageSystem` | `originalMaterials` | 바다 오염 시각화 머티리얼 |
+| `powerManager` | `powerViewOriginalMaterials` | 전력 뷰 머티리얼 |
+
+---
+
+## 시각화 오버레이 렌더링 (Always-On-Top)
+
+### 개요
+
+데이터 시각화 그래프(땅값, 인구, 교통량 등)와 유틸리티 연결선(전력선, 수도관, 하수관)은 다른 오브젝트에 가려지지 않고 항상 최상단에 렌더링됨. Unity의 레이어 시스템과 유사한 방식.
+
+### 구현 방법
+
+#### 1. renderOrder 설정
+
+Three.js의 `renderOrder` 속성으로 렌더링 순서를 제어:
+
+```javascript
+// 시각화 그래프 그룹
+landValueGroup.renderOrder = 999;
+populationGroup.renderOrder = 999;
+trafficViewGroup.renderOrder = 999;
+windViewGroup.renderOrder = 999;
+
+// 유틸리티 연결선
+powerManager.powerLineGroup.renderOrder = 999;
+powerManager.powerIconGroup.renderOrder = 1000;  // 선보다 위에
+
+waterManager.waterPipeGroup.renderOrder = 999;
+waterManager.waterIconGroup.renderOrder = 1000;
+
+sewageManager.sewagePipeGroup.renderOrder = 999;
+sewageManager.sewageIconGroup.renderOrder = 1000;
+```
+
+#### 2. 깊이 테스트 비활성화 (유틸리티 연결선)
+
+전력선/수도관/하수관은 건물 뒤에 가려도 항상 보이도록 깊이 테스트 비활성화:
+
+```javascript
+const lineMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffcc00,
+    transparent: true,
+    opacity: 0.95,
+    depthTest: false,   // 깊이 테스트 비활성화 (항상 렌더링)
+    depthWrite: false   // 깊이 버퍼에 쓰지 않음
+});
+```
+
+### 적용 대상
+
+| 대상 | renderOrder | depthTest | 설명 |
+|------|-------------|-----------|------|
+| 땅값 그래프 | 999 | true | 건물 위에 렌더링 |
+| 인구 그래프 | 999 | true | 건물 위에 렌더링 |
+| 교통량 그래프 | 999 | true | 도로 위에 렌더링 |
+| 바람 시각화 | 999 | true | 지형 위에 렌더링 |
+| 전력선 | 999 | false | 항상 보임 |
+| 수도관 | 999 | false | 항상 보임 |
+| 하수관 | 999 | false | 항상 보임 |
+| 유틸리티 아이콘 | 1000 | false | 연결선보다 위에 |
+
+### 주의사항
+
+- `depthTest: false` 사용 시 렌더링 순서가 중요해짐
+- 동일 `renderOrder` 내에서는 추가 순서대로 렌더링됨
+- 아이콘은 연결선보다 높은 `renderOrder`로 항상 위에 표시

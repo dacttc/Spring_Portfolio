@@ -16,6 +16,9 @@ public interface CityMapRepository extends JpaRepository<CityMap, Long> {
     // 멀티 도시 지원
     List<CityMap> findByUser(User user);
     List<CityMap> findByUserUsername(String username);
+
+    // 최근 플레이 순으로 정렬된 도시 목록
+    List<CityMap> findByUserUsernameOrderByUpdatedAtDesc(String username);
     Optional<CityMap> findByUserAndSlug(User user, String slug);
     Optional<CityMap> findByUserUsernameAndSlug(String username, String slug);
     boolean existsByUserAndSlug(User user, String slug);

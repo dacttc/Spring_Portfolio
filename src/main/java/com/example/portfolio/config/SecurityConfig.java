@@ -21,6 +21,7 @@ import org.springframework.security.web.session.HttpSessionEventPublisher;
 @Configuration
 public class SecurityConfig {
     public static final String RESEND_USERNAME_SESSION_KEY = "RESEND_USERNAME";
+    public static final String SESSION_CONFLICT_USERNAME_KEY = "SESSION_CONFLICT_USERNAME";
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
@@ -32,7 +33,8 @@ public class SecurityConfig {
                         .requestMatchers("/","/viewer/**",
                                 "/models/**",
                                 "/**/*.gltf", "/**/*.glb", "/**/*.bin",
-                                "/**/*.png", "/**/*.jpg", "/**/*.jpeg", "/**/*.webp","/resend-verification","/verify","/signup","/test-email","/css/**", "/js/**").permitAll()
+                                "/**/*.png", "/**/*.jpg", "/**/*.jpeg", "/**/*.webp","/resend-verification","/verify","/signup","/test-email","/css/**", "/js/**",
+                                "/api/session/**").permitAll()
                         // 도시 맵 API - GET은 공개, 나머지는 인증 필요
                         .requestMatchers(HttpMethod.GET, "/api/map/**").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/map/**").authenticated()
@@ -62,6 +64,9 @@ public class SecurityConfig {
                             if (exception instanceof SessionAuthenticationException ||
                                     cause instanceof SessionAuthenticationException) {
                                 log.warn("동시 로그인 차단: {}", inputUsername);
+                                // 세션에 충돌된 사용자명 저장 (기존 세션 끊기용)
+                                HttpSession session = request.getSession(true);
+                                session.setAttribute(SESSION_CONFLICT_USERNAME_KEY, inputUsername);
                                 response.sendRedirect("/login?maxSession");
                                 return;
                             }

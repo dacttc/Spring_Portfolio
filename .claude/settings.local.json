@@ -37,7 +37,20 @@
       "Bash(cmd /c \"taskkill /PID 30760 /F\")",
       "Bash(powershell \"Stop-Process -Id 30760 -Force\")",
       "Bash(powershell \"Stop-Process -Id 45196 -Force\")",
-      "Bash(dir \"C:\\\\Users\\\\dactt\\\\Desktop\\\\새 폴더 \\(3\\)\\\\Spring_Portfolio-main\\\\src\\\\main\\\\resources\\\\static\\\\models\\\\civil buildlings\\\\commerical high\\\\2x2\")"
+      "Bash(dir \"C:\\\\Users\\\\dactt\\\\Desktop\\\\새 폴더 \\(3\\)\\\\Spring_Portfolio-main\\\\src\\\\main\\\\resources\\\\static\\\\models\\\\civil buildlings\\\\commerical high\\\\2x2\")",
+      "Bash(node:*)",
+      "Bash(wc:*)",
+      "Bash(dir \"C:\\\\Users\\\\dactt\\\\Desktop\\\\새 폴더 \\(3\\)\\\\Spring_Portfolio-main\\\\src\\\\main\\\\resources\\\\static\\\\models\\\\road_tile_river_2x2_008.glb\")",
+      "Bash(Get-ChildItem \"C:\\\\Users\\\\dactt\\\\Desktop\\\\새 폴더 \\(3\\)\\\\Spring_Portfolio-main\\\\src\\\\main\\\\resources\\\\static\\\\models\" -Name)",
+      "Bash(Where-Object { $_ -match \"water|sea|ocean|bangpa|beach|wave\" })",
+      "Bash(powershell \"Stop-Process -Id 16168 -Force\")",
+      "Bash(powershell \"Get-Process -Id \\(Get-NetTCPConnection -LocalPort 8080\\).OwningProcess | Stop-Process -Force\")",
+      "Bash(powershell:*)",
+      "Bash(.gradlew.bat bootRun)",
+      "Bash(cmd /c \"cd /d C:\\\\Users\\\\dactt\\\\Desktop\\\\새 폴더 \\(3\\)\\\\Spring_Portfolio-main && gradlew.bat bootRun\")",
+      "Bash(grep:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
